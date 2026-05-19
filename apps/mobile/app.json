@@ -43,6 +43,12 @@
           ]
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "128018c5-c21a-4f8f-be49-58d35bf17ad1"
+      }
+    },
+    "owner": "jaypark_jr"
   }
 }
