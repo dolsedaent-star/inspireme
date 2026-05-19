@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { Svg, Circle, Path, Line, SvgText } from './svg';
-import type { LifeCurvePoint, UserProfile } from '@inspireme/shared';
+import type { LifeCurvePoint, UserProfile } from '../shared';
 import { colors, spacing, type } from '../theme';
 
 const PAD = { top: 30, right: 24, bottom: 32, left: 24 };

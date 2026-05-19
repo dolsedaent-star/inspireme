@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
-import type { EventCategory, TimelineEvent, UserProfile } from '@inspireme/shared';
-import { stageForAge } from '@inspireme/shared';
+import type { EventCategory, TimelineEvent, UserProfile } from '../shared';
+import { stageForAge } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
 
 const CATEGORY_LABEL: Record<EventCategory, string> = {

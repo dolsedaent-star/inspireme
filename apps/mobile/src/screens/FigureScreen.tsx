@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { personalize } from '@inspireme/shared';
-import type { Figure } from '@inspireme/shared';
+import { personalize } from '../shared';
+import type { Figure } from '../shared';
 import { colors, spacing, type } from '../theme';
 import { Hero } from '../components/Hero';
 import { SectionLabel } from '../components/SectionLabel';

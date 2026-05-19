@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import type { FigureCategory, Gender } from '@inspireme/shared';
+import type { FigureCategory, Gender } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
 import { useUserProfile } from '../state/userProfile';
 import type { ScreenProps } from '../navigation/types';

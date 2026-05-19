@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import type { Figure } from '@inspireme/shared';
+import type { Figure } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
 import { FigureCard } from '../components/FigureCard';
 import { loadDailyFigures } from '../services/figures';

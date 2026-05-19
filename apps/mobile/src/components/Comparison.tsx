@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import type { TimelineEvent } from '@inspireme/shared';
+import type { TimelineEvent } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
 
 export function Comparison({

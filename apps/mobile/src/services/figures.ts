@@ -1,4 +1,4 @@
-import type { Figure, FigureCategory, FigureData, FigureSources } from '@inspireme/shared';
+import type { Figure, FigureCategory, FigureData, FigureSources } from '../shared';
 import { mockFigures } from '../data/mockFigures';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 

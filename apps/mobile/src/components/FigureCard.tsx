@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { personalize } from '@inspireme/shared';
-import type { Figure, UserProfile } from '@inspireme/shared';
+import { personalize } from '../shared';
+import type { Figure, UserProfile } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
 import { wikiImageSource } from '../services/images';
 

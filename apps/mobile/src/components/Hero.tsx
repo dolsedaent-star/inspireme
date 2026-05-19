@@ -1,5 +1,5 @@
 import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Figure } from '@inspireme/shared';
+import type { Figure } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
 import { wikiImageSource } from '../services/images';
 

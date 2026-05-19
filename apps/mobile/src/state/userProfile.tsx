@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import type { UserProfile } from '@inspireme/shared';
+import type { UserProfile } from '../shared';
 
 const STORAGE_KEY = 'inspireme.userProfile.v1';
 

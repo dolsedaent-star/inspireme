@@ -1,4 +1,4 @@
-import type { Figure } from '@inspireme/shared';
+import type { Figure } from '../shared';
 
 export const mockFigures: Figure[] = [
   {

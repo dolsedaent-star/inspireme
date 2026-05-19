@@ -1,5 +1,5 @@
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { FigureSources } from '@inspireme/shared';
+import type { FigureSources } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
 
 export function SourcesBlock({ sources }: { sources: FigureSources }) {
