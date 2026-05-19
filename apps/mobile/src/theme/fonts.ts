@@ -1,14 +1,12 @@
 import { useFonts } from 'expo-font';
 
-/**
- * Load custom font files. Once we add Playfair Display / Noto Serif KR /
- * Pretendard files into apps/mobile/assets/fonts and register them in
- * app.json (`plugins: [["expo-font", { fonts: [...] }]]`), reference them
- * here. For now this returns `[true]` immediately so platform defaults are
- * used and the splash hand-off is not blocked.
- */
 export function useAppFonts(): [boolean, Error | null] {
-  const [loaded, error] = useFonts({});
-  // expo-font returns loaded=true when the font map is empty.
-  return [loaded, error];
+  return useFonts({
+    'PlayfairDisplay-Regular': require('../../assets/fonts/PlayfairDisplay_400Regular.ttf'),
+    'PlayfairDisplay-Italic': require('../../assets/fonts/PlayfairDisplay_400Regular_Italic.ttf'),
+    'PlayfairDisplay-Bold': require('../../assets/fonts/PlayfairDisplay_700Bold.ttf'),
+    'Pretendard-Regular': require('../../assets/fonts/Pretendard-Regular.otf'),
+    'Pretendard-SemiBold': require('../../assets/fonts/Pretendard-SemiBold.otf'),
+    'Pretendard-Bold': require('../../assets/fonts/Pretendard-Bold.otf'),
+  });
 }
