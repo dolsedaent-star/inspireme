@@ -1,0 +1,62 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# Expo / RN
+.expo/
+.expo-shared/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.orig.*
+expo-env.d.ts
+
+# iOS / Android build artifacts (when using bare workflow)
+apps/mobile/ios/Pods/
+apps/mobile/ios/build/
+apps/mobile/android/.gradle/
+apps/mobile/android/build/
+apps/mobile/android/app/build/
+apps/mobile/android/local.properties
+
+# EAS / TS
+.eas/
+*.tsbuildinfo
+
+# Editors / OS
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+expo-web.log
+expo-web.err.log
+
+# Generated content (raw images stored in Supabase; local images optional)
+data/_cache/
+images/_tmp/
+
+# Old project (to be deleted once IDE releases lock) — root-only, not apps/mobile
+/mobile_old/
+/mobile/
+
+# Local Claude Code per-machine settings (not for sharing across dev machines)
+.claude/

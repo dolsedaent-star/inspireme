@@ -1,0 +1,21 @@
+{
+  "name": "inspireme",
+  "version": "0.1.0",
+  "private": true,
+  "description": "한 사람의 인생을 디지털 매거진처럼 보여주는 인터랙티브 전기 앱.",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "scripts"
+  ],
+  "scripts": {
+    "mobile": "npm --workspace apps/mobile run start",
+    "android": "npm --workspace apps/mobile run android",
+    "ios": "npm --workspace apps/mobile run ios",
+    "generate": "npm --workspace scripts run generate",
+    "lint": "echo \"(lint to be configured)\""
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
