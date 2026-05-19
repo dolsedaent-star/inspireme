@@ -8,6 +8,7 @@
     "generate:dry": "tsx generate.ts --dry",
     "mirror-images": "tsx mirror-images.ts",
     "fill-epilogue": "tsx fill-epilogue.ts",
+    "upload-bgm": "tsx upload-bgm.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
