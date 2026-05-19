@@ -4,16 +4,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAppFonts } from './src/theme/fonts';
 import { UserProfileProvider } from './src/state/userProfile';
 import { RootNavigator } from './src/navigation/RootNavigator';
-import { useBgm } from './src/services/bgm';
-import { MuteButton } from './src/components/MuteButton';
 
 function AppInner() {
-  const { enabled, muted, toggleMute } = useBgm();
   return (
     <>
       <StatusBar style="light" />
       <RootNavigator />
-      <MuteButton muted={muted} onPress={toggleMute} />
     </>
   );
 }

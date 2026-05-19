@@ -3,6 +3,8 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 import { StatusBar } from 'expo-status-bar';
 import { personalize } from '../shared';
 import type { Figure } from '../shared';
+import { useBgm } from '../services/bgm';
+import { MuteButton } from '../components/MuteButton';
 import { colors, spacing, type } from '../theme';
 import { Hero } from '../components/Hero';
 import { SectionLabel } from '../components/SectionLabel';
@@ -22,6 +24,7 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
   const { profile } = useUserProfile();
   const [figure, setFigure] = useState<Figure | null>(null);
   const [loading, setLoading] = useState(true);
+  const { muted, toggleMute } = useBgm();
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +67,7 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
+      <MuteButton muted={muted} onPress={toggleMute} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
