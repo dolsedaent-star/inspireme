@@ -25,6 +25,7 @@ ${wiki}
 - timeline은 정확히 10~12개의 이벤트. 각 나이대(childhood/teens/twenties/thirties/forties/fifties/later)에 최소 1개씩 분포.
 - 각 event의 category는 다음 중 하나: failure, challenge, success, turning_point, later_years
 - failure_event는 인물 인생의 가장 깊은 실패/시련 한 가지. success_event는 가장 큰 성취. 둘 다 timeline에도 포함될 수 있음.
+- epilogue_ko는 4~6문장. 인물의 말년이 어땠는지(건강·경제·주변 관계·심리), 어떤 환경에서 어떻게 죽음을 맞이했는지(장소·원인·곁에 누가 있었는지·당시 분위기), 마지막 순간에 그가 어떤 표정·말을 남겼는지를 차분한 매거진 톤으로 서술. 행복했는지 외로웠는지를 솔직하게. 사실이 불명확하면 "전해진 바로는…" 같은 완곡한 표현 사용.
 - keywords는 정확히 5개의 한국어 키워드 (각 1~6자).
 - life_curve는 5~6개의 (age, value, label_ko) 점. value는 -1.0(최저)~+1.0(최고). 인생의 굴곡을 표현.
 - insights_ko는 정확히 3개. 각 인사이트는 사용자가 자기 인생에 비춰볼 만한 1~2문장의 따뜻한 통찰.
@@ -51,6 +52,7 @@ ${wiki}
   ],
   "life_curve": [ { "age": 21, "value": 0.6, "label_ko": "..." } ],
   "legacy_ko": "...",
+  "epilogue_ko": "말년·죽음·마지막 순간 4~6문장.",
   "insights_ko": ["...","...","..."],
   "comparison_ko": "...",
   "today_question_ko": "...",

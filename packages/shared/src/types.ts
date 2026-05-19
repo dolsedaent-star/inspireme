@@ -61,6 +61,8 @@ export interface FigureData {
   timeline: TimelineEvent[];
   life_curve: LifeCurvePoint[];
   legacy_ko: string;
+  /** Closing chapter: late life, mood, death context. Optional for older rows. */
+  epilogue_ko?: string;
   insights_ko: [string, string, string];
   comparison_ko: string;
   today_question_ko: string;

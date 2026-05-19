@@ -12,6 +12,7 @@ import { LifeCurveChart } from '../components/LifeCurveChart';
 import { InsightCards } from '../components/InsightCards';
 import { TodayQuestion } from '../components/TodayQuestion';
 import { Comparison } from '../components/Comparison';
+import { Epilogue } from '../components/Epilogue';
 import { SourcesBlock } from '../components/SourcesBlock';
 import { loadFigureById } from '../services/figures';
 import { useUserProfile } from '../state/userProfile';
@@ -107,6 +108,10 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
 
           <Section title="통찰 셋">
             <InsightCards insights={data.insights_ko} />
+          </Section>
+
+          <Section title="말년과 죽음">
+            <Epilogue figure={figure} />
           </Section>
 
           <Section title="유산">

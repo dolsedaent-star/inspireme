@@ -50,6 +50,7 @@ export const figureDataSchema = z
     timeline: z.array(timelineEventLoose).min(8).max(14),
     life_curve: z.array(lifeCurvePoint).min(4).max(8),
     legacy_ko: z.string().min(1),
+    epilogue_ko: z.string().min(1).optional(),
     insights_ko: z.array(z.string()).length(3),
     comparison_ko: z.string().min(1),
     today_question_ko: z.string().min(1),
