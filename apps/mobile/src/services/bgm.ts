@@ -1,11 +1,37 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Audio } from 'expo-av';
 
-// BGM 파일(bgm/bgm1.mp3)을 repo 루트에 넣은 뒤 아래 주석을 해제하세요.
-// import { useEffect, useRef } from 'react';
-// import { Audio } from 'expo-av';
-// const TRACKS = [require('../../../../bgm/bgm1.mp3')];
+const TRACKS = [
+  require('../../../../bgm/bgm1.mp3'),
+];
 
 export function useBgm() {
+  const soundRef = useRef<Audio.Sound | null>(null);
   const [muted, setMuted] = useState(false);
-  return { enabled: false, muted, toggleMute: () => setMuted(v => !v) };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      const track = TRACKS[Math.floor(Math.random() * TRACKS.length)];
+      const { sound } = await Audio.Sound.createAsync(track, {
+        isLooping: true,
+        volume: 0.35,
+        shouldPlay: true,
+      });
+      if (cancelled) { sound.unloadAsync(); return; }
+      soundRef.current = sound;
+    })();
+    return () => {
+      cancelled = true;
+      soundRef.current?.unloadAsync();
+      soundRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    soundRef.current?.setVolumeAsync(muted ? 0 : 0.35);
+  }, [muted]);
+
+  return { enabled: true, muted, toggleMute: () => setMuted(v => !v) };
 }
