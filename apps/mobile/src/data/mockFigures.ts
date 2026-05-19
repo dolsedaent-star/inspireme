@@ -11,6 +11,11 @@ export const mockFigures: Figure[] = [
     country: '독일/미국',
     categories: ['science'],
     cover_image_url: null,
+    image_credit: null,
+    sources: {
+      wikipedia_ko: 'https://ko.wikipedia.org/wiki/%EC%95%8C%EB%B2%A0%EB%A5%B4%ED%8A%B8_%EC%95%84%EC%9D%B8%EC%8A%88%ED%83%80%EC%9D%B8',
+      wikipedia_en: 'https://en.wikipedia.org/wiki/Albert_Einstein',
+    },
     data: {
       quote_ko: '실패한 적 없는 사람은 새로운 것을 시도해 본 적 없는 사람이다.',
       quote_en: 'A person who never made a mistake never tried anything new.',
@@ -139,6 +144,11 @@ export const mockFigures: Figure[] = [
     country: '네덜란드',
     categories: ['art'],
     cover_image_url: null,
+    image_credit: null,
+    sources: {
+      wikipedia_ko: 'https://ko.wikipedia.org/wiki/%EB%B9%88%EC%84%BC%ED%8A%B8_%EB%B0%98_%EA%B3%A0%ED%9D%90',
+      wikipedia_en: 'https://en.wikipedia.org/wiki/Vincent_van_Gogh',
+    },
     data: {
       quote_ko: '위대한 일은 작은 일들을 모은 결과다.',
       quote_en: 'Great things are done by a series of small things brought together.',
@@ -238,6 +248,11 @@ export const mockFigures: Figure[] = [
     country: '미국',
     categories: ['tech', 'business'],
     cover_image_url: null,
+    image_credit: null,
+    sources: {
+      wikipedia_ko: 'https://ko.wikipedia.org/wiki/%EC%8A%A4%ED%8B%B0%EB%B8%8C_%EC%9E%A1%EC%8A%A4',
+      wikipedia_en: 'https://en.wikipedia.org/wiki/Steve_Jobs',
+    },
     data: {
       quote_ko: '쫓겨난 일은 내 인생에서 일어날 수 있는 가장 좋은 일이었다.',
       quote_en: 'Getting fired from Apple was the best thing that could have ever happened to me.',

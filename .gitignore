@@ -60,3 +60,8 @@ images/_tmp/
 
 # Local Claude Code per-machine settings (not for sharing across dev machines)
 .claude/
+
+# Ad-hoc debug captures
+/screen.png
+/[0-9]*.jpg
+/[0-9]*.png

@@ -1,4 +1,4 @@
-import type { Figure, FigureCategory, FigureData } from '@inspireme/shared';
+import type { Figure, FigureCategory, FigureData, FigureSources } from '@inspireme/shared';
 import { mockFigures } from '../data/mockFigures';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 
@@ -16,9 +16,15 @@ type FigureRow = {
   keywords: string[] | null;
   data: FigureData;
   image_url: string | null;
+  image_credit: string | null;
+  sources: FigureSources | null;
 };
 
 function rowToFigure(row: FigureRow): Figure {
+  // Synthesize Wikipedia URLs from name so we always have a citation, even
+  // for figures whose generator run pre-dated the sources column.
+  const wikiKo = `https://ko.wikipedia.org/wiki/${encodeURIComponent(row.korean_name ?? row.name)}`;
+  const wikiEn = `https://en.wikipedia.org/wiki/${encodeURIComponent(row.name.replace(/ /g, '_'))}`;
   return {
     id: row.id,
     name_ko: row.korean_name ?? row.name,
@@ -29,6 +35,14 @@ function rowToFigure(row: FigureRow): Figure {
     country: row.country ?? '',
     categories: (row.fields ?? []) as FigureCategory[],
     cover_image_url: row.image_url,
+    image_credit: row.image_credit,
+    sources: {
+      wikipedia_ko: row.sources?.wikipedia_ko ?? wikiKo,
+      wikipedia_en: row.sources?.wikipedia_en ?? wikiEn,
+      image_credit: row.sources?.image_credit ?? row.image_credit ?? undefined,
+      generated_by: row.sources?.generated_by,
+      generated_at: row.sources?.generated_at,
+    },
     data: row.data,
   };
 }

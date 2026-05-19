@@ -67,6 +67,14 @@ export interface FigureData {
   image_prompt: string;
 }
 
+export interface FigureSources {
+  wikipedia_ko?: string;
+  wikipedia_en?: string;
+  image_credit?: string;
+  generated_by?: string; // e.g. "gemini-2.5-flash"
+  generated_at?: string;
+}
+
 export interface Figure {
   id: string;
   name_ko: string;
@@ -77,6 +85,8 @@ export interface Figure {
   country: string;
   categories: FigureCategory[];
   cover_image_url: string | null;
+  image_credit: string | null;
+  sources: FigureSources;
   data: FigureData;
 }
 

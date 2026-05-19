@@ -12,6 +12,7 @@ import { LifeCurveChart } from '../components/LifeCurveChart';
 import { InsightCards } from '../components/InsightCards';
 import { TodayQuestion } from '../components/TodayQuestion';
 import { Comparison } from '../components/Comparison';
+import { SourcesBlock } from '../components/SourcesBlock';
 import { loadFigureById } from '../services/figures';
 import { useUserProfile } from '../state/userProfile';
 import type { ScreenProps } from '../navigation/types';
@@ -114,6 +115,10 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
 
           <Section title="오늘">
             <TodayQuestion question={data.today_question_ko} />
+          </Section>
+
+          <Section title="출처 / 검증">
+            <SourcesBlock sources={figure.sources} />
           </Section>
         </View>
       </ScrollView>

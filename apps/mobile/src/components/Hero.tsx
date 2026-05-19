@@ -1,6 +1,7 @@
 import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Figure } from '@inspireme/shared';
 import { colors, radii, spacing, type } from '../theme';
+import { wikiImageSource } from '../services/images';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const HERO_H = Math.round(SCREEN_H * 0.7);
@@ -10,7 +11,7 @@ export function Hero({ figure, onBack }: { figure: Figure; onBack: () => void })
     <View style={styles.wrap}>
       {figure.cover_image_url ? (
         <Image
-          source={{ uri: figure.cover_image_url }}
+          source={wikiImageSource(figure.cover_image_url, 1200)!}
           resizeMode="cover"
           style={StyleSheet.absoluteFill}
         />

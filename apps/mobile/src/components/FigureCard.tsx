@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { personalize } from '@inspireme/shared';
 import type { Figure, UserProfile } from '@inspireme/shared';
 import { colors, radii, spacing, type } from '../theme';
+import { wikiImageSource } from '../services/images';
 
 /**
  * Daily picks card — magazine cover composition.
@@ -46,9 +47,10 @@ export function FigureCard({
     >
       {figure.cover_image_url ? (
         <Image
-          source={{ uri: figure.cover_image_url }}
+          source={wikiImageSource(figure.cover_image_url, 900)!}
           resizeMode="cover"
           style={StyleSheet.absoluteFill}
+          onError={(e) => console.log('[img error]', figure.id, e.nativeEvent)}
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.noPhotoBg]} />

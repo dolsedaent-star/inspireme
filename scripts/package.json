@@ -6,6 +6,7 @@
   "scripts": {
     "generate": "tsx generate.ts",
     "generate:dry": "tsx generate.ts --dry",
+    "mirror-images": "tsx mirror-images.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
