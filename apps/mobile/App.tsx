@@ -6,6 +6,19 @@ import { colors } from './src/theme';
 import { useAppFonts } from './src/theme/fonts';
 import { UserProfileProvider } from './src/state/userProfile';
 import { RootNavigator } from './src/navigation/RootNavigator';
+import { useBgm } from './src/services/bgm';
+import { MuteButton } from './src/components/MuteButton';
+
+function AppInner() {
+  const { enabled, muted, toggleMute } = useBgm();
+  return (
+    <>
+      <StatusBar style="light" />
+      <RootNavigator />
+      {enabled && <MuteButton muted={muted} onPress={toggleMute} />}
+    </>
+  );
+}
 
 export default function App() {
   const [fontsLoaded] = useAppFonts();
@@ -21,8 +34,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <UserProfileProvider>
-        <StatusBar style="light" />
-        <RootNavigator />
+        <AppInner />
       </UserProfileProvider>
     </SafeAreaProvider>
   );
