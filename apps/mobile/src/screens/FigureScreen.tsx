@@ -1,17 +1,23 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { personalize } from '@inspireme/shared';
 import type { Figure } from '@inspireme/shared';
 import { colors, spacing, type } from '../theme';
+import { Hero } from '../components/Hero';
+import { SectionLabel } from '../components/SectionLabel';
+import { KeywordChips } from '../components/KeywordChips';
+import { TimelineList } from '../components/TimelineList';
+import { LifeCurveChart } from '../components/LifeCurveChart';
+import { InsightCards } from '../components/InsightCards';
+import { TodayQuestion } from '../components/TodayQuestion';
+import { Comparison } from '../components/Comparison';
 import { loadFigureById } from '../services/figures';
+import { useUserProfile } from '../state/userProfile';
 import type { ScreenProps } from '../navigation/types';
 
-/**
- * Placeholder — full Hero / Timeline / EventDetail / LifeCurve / Comparison
- * composition lands in the next milestone. For now we confirm data lookup
- * works against either Supabase or the local mock.
- */
-export default function FigureScreen({ route }: ScreenProps<'Figure'>) {
+export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'>) {
+  const { profile } = useUserProfile();
   const [figure, setFigure] = useState<Figure | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -30,47 +36,120 @@ export default function FigureScreen({ route }: ScreenProps<'Figure'>) {
     };
   }, [route.params.figureId]);
 
+  const insight = useMemo(
+    () => (figure && profile ? personalize(figure, profile) : null),
+    [figure, profile],
+  );
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.gold} />
-        </View>
-      </SafeAreaView>
+      <View style={styles.center}>
+        <ActivityIndicator color={colors.gold} />
+      </View>
     );
   }
 
   if (!figure) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <Text style={styles.title}>인물을 찾을 수 없습니다.</Text>
-      </SafeAreaView>
+      <View style={styles.center}>
+        <Text style={styles.errorText}>인물을 찾을 수 없습니다.</Text>
+      </View>
     );
   }
 
+  const data = figure.data;
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <View style={styles.container}>
-        <Text style={styles.eyebrow}>{figure.era.toUpperCase()}</Text>
-        <Text style={styles.name}>{figure.name_ko}</Text>
-        <Text style={styles.nameEn}>{figure.name_en}</Text>
-        <Text style={styles.quote}>“{figure.data.quote_ko}”</Text>
-        <Text style={styles.note}>
-          (Hero · Timeline · Event Detail · Life Curve · Insights — 다음 단계에서 채워집니다)
-        </Text>
-      </View>
-    </SafeAreaView>
+    <View style={styles.root}>
+      <StatusBar style="light" />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Hero figure={figure} onBack={() => navigation.goBack()} />
+
+        <View style={styles.body}>
+          {insight && (
+            <View style={styles.youPanel}>
+              <Text style={styles.youEyebrow}>{profile?.age}세의 당신에게</Text>
+              <Text style={styles.youText}>{insight.comparison_ko}</Text>
+              {insight.next_turning_point && insight.years_until_next !== null && (
+                <Text style={styles.youSub}>
+                  {figure.name_ko}의 다음 전환점까지 {Math.max(insight.years_until_next, 0)}년 —{' '}
+                  {insight.next_turning_point.title_ko}
+                </Text>
+              )}
+            </View>
+          )}
+
+          <Section title="요약">
+            <Text style={styles.body16}>{data.summary_ko}</Text>
+          </Section>
+
+          <Section title="핵심 키워드">
+            <KeywordChips keywords={data.keywords} />
+          </Section>
+
+          <Section title="추락과 도약">
+            <Comparison failure={data.failure_event} success={data.success_event} />
+          </Section>
+
+          <Section title="인생 곡선">
+            <LifeCurveChart curve={data.life_curve} profile={profile} />
+            <Text style={[styles.body14, { marginTop: spacing.md }]}>{data.comparison_ko}</Text>
+          </Section>
+
+          <Section title="일대기">
+            <TimelineList events={data.timeline} profile={profile} />
+          </Section>
+
+          <Section title="통찰 셋">
+            <InsightCards insights={data.insights_ko} />
+          </Section>
+
+          <Section title="유산">
+            <Text style={styles.body16}>{data.legacy_ko}</Text>
+          </Section>
+
+          <Section title="오늘">
+            <TodayQuestion question={data.today_question_ko} />
+          </Section>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <View style={styles.section}>
+      <SectionLabel>{title}</SectionLabel>
+      {children}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  container: { padding: spacing.lg, gap: spacing.md },
-  eyebrow: { ...type.section, color: colors.gold },
-  name: { ...type.heroKo, color: colors.text },
-  nameEn: { ...type.caption, color: colors.textSecondary },
-  quote: { ...type.quoteKo, color: colors.gold, marginTop: spacing.lg },
-  note: { ...type.caption, color: colors.textTertiary, marginTop: spacing.xl },
-  title: { ...type.titleKo, color: colors.text, padding: spacing.lg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  root: { flex: 1, backgroundColor: colors.bg },
+  scroll: { flex: 1, backgroundColor: colors.bg },
+  scrollContent: { paddingBottom: spacing.xxxl },
+  body: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl, gap: spacing.xl },
+  section: { gap: spacing.md },
+  body14: { ...type.bodyKo, color: colors.textSecondary, fontSize: 14, lineHeight: 22 },
+  body16: { ...type.bodyKo, color: colors.text, fontSize: 16, lineHeight: 26 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg },
+  errorText: { ...type.titleKo, color: colors.textSecondary },
+
+  youPanel: {
+    padding: spacing.lg,
+    borderRadius: 16,
+    backgroundColor: 'rgba(217, 179, 106, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(217, 179, 106, 0.35)',
+    gap: spacing.sm,
+  },
+  youEyebrow: { ...type.label, color: colors.gold },
+  youText: { ...type.quoteKo, color: colors.text, fontSize: 17, lineHeight: 26 },
+  youSub: { ...type.bodyKo, color: colors.textSecondary, fontSize: 13, lineHeight: 20 },
 });
