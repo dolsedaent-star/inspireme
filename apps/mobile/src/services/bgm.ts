@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Audio } from 'expo-av';
 
 const TRACKS = [
-  require('../../../../bgm/bgm1.mp3'),
+  require('../../assets/bgm/bgm1.mp3'),
 ];
 
 export function useBgm() {
