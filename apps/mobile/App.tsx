@@ -15,7 +15,7 @@ function AppInner() {
     <>
       <StatusBar style="light" />
       <RootNavigator />
-      {enabled && <MuteButton muted={muted} onPress={toggleMute} />}
+      <MuteButton muted={muted} onPress={toggleMute} />
     </>
   );
 }
