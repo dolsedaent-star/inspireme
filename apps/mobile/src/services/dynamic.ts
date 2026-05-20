@@ -12,6 +12,7 @@
  * server-side and an ad-unlock counter can gate the call.
  */
 
+import { Alert } from 'react-native';
 import type {
   Figure,
   FigureCategory,
@@ -21,6 +22,15 @@ import type {
   TimelineEvent,
 } from '../shared';
 import { getSupabase, isSupabaseConfigured } from './supabase';
+
+// Debug toggle — when true, every dynamic-generation step pops an Alert so we
+// can see release-build failures without logcat. Set false before shipping.
+const DEBUG = false;
+function dbg(stage: string, info?: unknown) {
+  if (!DEBUG) return;
+  const msg = info instanceof Error ? info.message : info != null ? String(info) : '';
+  Alert.alert('dynamic', `${stage}${msg ? ' — ' + msg.slice(0, 200) : ''}`);
+}
 
 const GEMINI_MODEL = process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
@@ -421,22 +431,25 @@ function normalizeData(raw: any): FigureData | null {
 // ─────────────────────────────────────────────────────────────
 
 export async function generateAndCacheFigure(c: Candidate): Promise<Figure | null> {
+  dbg(`start ${c.slug}`);
   const wiki = await lookupWiki(c.name_en, c.name_ko);
+  dbg(`wiki ${c.slug}`, `image=${wiki.image_url ? 'y' : 'n'} summary=${wiki.summary ? 'y' : 'n'}`);
   const prompt = buildPrompt(c, wiki);
 
   let raw: unknown;
   try {
     raw = await callGemini(prompt);
   } catch (e) {
-    console.log('[dynamic] Gemini call failed:', e instanceof Error ? e.message : e);
+    dbg(`gemini-fail ${c.slug}`, e);
     return null;
   }
 
   const data = normalizeData(raw);
   if (!data) {
-    console.log('[dynamic] schema normalization failed for', c.slug);
+    dbg(`schema-fail ${c.slug}`);
     return null;
   }
+  dbg(`schema-ok ${c.slug}`, `timeline=${data.timeline.length}`);
 
   const imageUrl = await mirrorImage(c.slug, wiki.image_url);
   // Pull additional photos from the Wikipedia page (best-effort).
@@ -476,9 +489,10 @@ export async function generateAndCacheFigure(c: Candidate): Promise<Figure | nul
     .select('*')
     .maybeSingle();
   if (error || !row) {
-    console.log('[dynamic] upsert failed:', error?.message);
+    dbg(`upsert-fail ${c.slug}`, error?.message);
     return null;
   }
+  dbg(`upsert-ok ${c.slug}`, `img=${imageUrl ? 'y' : 'n'} gallery=${data.gallery?.length ?? 0}`);
 
   const sources: FigureSources = {
     wikipedia_ko: wiki.wikipedia_ko,
