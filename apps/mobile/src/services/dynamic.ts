@@ -42,6 +42,8 @@ export type Candidate = {
   name_en: string;
   name_ko: string | null;
   categories: string[];
+  country: string | null;
+  deceased: boolean;
 };
 
 const VALID_STAGES = new Set([
@@ -66,10 +68,30 @@ const VALID_CATEGORIES = new Set([
 // Candidate picking
 // ─────────────────────────────────────────────────────────────
 
+// Korean app — Korean figures appear with 2× probability vs. other countries.
+const PREFERRED_COUNTRIES = ['korea'];
+
 function affinityScore(candidateCategories: string[], userFields: string[]): number {
   if (!userFields.length || !candidateCategories.length) return 0;
   const u = new Set(userFields);
   return candidateCategories.filter((c) => u.has(c)).length;
+}
+
+function countryBonus(country: string | null): number {
+  if (!country) return 0;
+  return PREFERRED_COUNTRIES.includes(country) ? 1 : 0;
+}
+
+/** Weighted random pick: items with higher weight appear more often. */
+function weightedPick<T>(items: T[], weight: (item: T) => number): T {
+  const weights = items.map(weight);
+  const total = weights.reduce((a, b) => a + b, 0);
+  let rand = Math.random() * total;
+  for (let i = 0; i < items.length; i++) {
+    rand -= weights[i];
+    if (rand <= 0) return items[i];
+  }
+  return items[items.length - 1];
 }
 
 export async function pickNextCandidate(
@@ -82,7 +104,8 @@ export async function pickNextCandidate(
 
   const { data: candidates, error: cErr } = await sb
     .from('figure_candidates')
-    .select('slug, name_en, name_ko, categories');
+    .select('slug, name_en, name_ko, categories, country, deceased')
+    .eq('deceased', true);  // 살아있는 인물 제외
   if (cErr || !candidates?.length) return null;
 
   const { data: figures } = await sb.from('figures').select('slug, id');
@@ -92,7 +115,7 @@ export async function pickNextCandidate(
   );
   const inFlight = new Set(excludeSlugs);
 
-  // Prefer fully new (not in figures yet) AND not already picked this batch
+  // Prefer fully new (not yet generated) AND not already picked this batch
   const fresh = (candidates as Candidate[]).filter(
     (c) => !existing.has(c.slug) && !inFlight.has(c.slug),
   );
@@ -101,14 +124,15 @@ export async function pickNextCandidate(
     : (candidates as Candidate[]).filter((c) => !excludedSlugs.has(c.slug) && !inFlight.has(c.slug));
   if (pool.length === 0) return null;
 
-  // Strict field filter — never return a candidate outside the user's
-  // chosen fields. (If none match, return null and let the caller decide
-  // what to do — usually fall back to the cached prebuilt pool.)
+  // Prefer candidates that match the user's chosen fields.
+  // If none match, use the full remaining pool.
   if (userFields.length > 0) {
-    pool = pool.filter((c) => affinityScore(c.categories, userFields) > 0);
-    if (pool.length === 0) return null;
+    const fieldFiltered = pool.filter((c) => affinityScore(c.categories, userFields) > 0);
+    if (fieldFiltered.length > 0) pool = fieldFiltered;
   }
-  return pool[Math.floor(Math.random() * pool.length)];
+
+  // Weighted pick: field affinity + country bonus (Korean figures 2× weight)
+  return weightedPick(pool, (c) => 1 + affinityScore(c.categories, userFields) + countryBonus(c.country));
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -486,6 +510,7 @@ export async function generateAndCacheFigure(c: Candidate): Promise<Figure | nul
         title: c.categories[0] ?? null,
         era,
         country: null,
+        country_code: c.country ?? null,
         birth_year: wiki.birth_year ?? null,
         death_year: wiki.death_year ?? null,
         fields: c.categories,

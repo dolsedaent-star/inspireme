@@ -11,6 +11,7 @@ type FigureRow = {
   title: string | null;
   era: string | null;
   country: string | null;
+  country_code: string | null;
   birth_year: number | null;
   death_year: number | null;
   fields: string[] | null;
@@ -66,6 +67,9 @@ function shuffle<T>(arr: T[]): T[] {
  *   generation fails or candidates run out.
  * - `exclude` skips figures already shown / viewed.
  */
+// Korean app — Korean figures appear more often in the cached pool.
+const PREFERRED_COUNTRIES = ['korea'];
+
 function fieldOverlap(rowFields: string[] | null | undefined, userFields: string[]): number {
   if (!rowFields?.length || !userFields.length) return 0;
   const set = new Set(userFields);
@@ -76,6 +80,21 @@ function fieldOverlap(rowFields: string[] | null | undefined, userFields: string
 function filterByFields<T extends { fields: string[] | null }>(rows: T[], userFields: string[]): T[] {
   if (!userFields.length) return rows;
   return rows.filter((r) => fieldOverlap(r.fields, userFields) > 0);
+}
+
+/**
+ * Weighted shuffle: Korean figures get 2× weight vs. others.
+ * Uses the random-key method — statistically correct weighted sampling.
+ */
+function weightedShuffle(rows: FigureRow[], userFields: string[]): FigureRow[] {
+  return rows
+    .map((r) => {
+      const countryW = PREFERRED_COUNTRIES.includes(r.country_code ?? '') ? 2 : 1;
+      const fieldW = 1 + fieldOverlap(r.fields, userFields);
+      return { r, key: Math.random() * countryW * fieldW };
+    })
+    .sort((a, b) => b.key - a.key)
+    .map(({ r }) => r);
 }
 
 export async function loadDailyFigures(opts: {
@@ -99,7 +118,10 @@ export async function loadDailyFigures(opts: {
   }
 
   const sb = getSupabase();
-  const { data: rows, error } = await sb.from('figures').select('*');
+  const { data: rows, error } = await sb
+    .from('figures')
+    .select('*')
+    .or('death_year.not.is.null,birth_year.lt.1940');
   if (error) throw error;
   const cachedPool = (rows ?? []).filter((r) => !exclude.has(r.id));
 
@@ -129,20 +151,25 @@ export async function loadDailyFigures(opts: {
     );
   }
 
-  // Fill remaining slots from cached pool — strict field filter so a sports
-  // user never sees a scientist if they didn't pick science.
+  // Fill remaining slots from cached pool.
+  // Prefer field-matched figures; if none match, fall back to the full pool.
+  // weightedShuffle gives Korean figures 2× probability over non-Korean.
   if (picked.length < count) {
     const used = new Set([...exclude, ...picked.map((f) => f.id)]);
     const remaining = cachedPool.filter((r) => !used.has(r.id));
-    const filtered = shuffle(filterByFields(remaining, userFields));
-    for (const r of filtered.slice(0, count - picked.length)) {
+    const fieldFiltered = filterByFields(remaining, userFields);
+    const pool = weightedShuffle(fieldFiltered.length > 0 ? fieldFiltered : remaining, userFields);
+    for (const r of pool.slice(0, count - picked.length)) {
       const f = rowToFigure(r);
       picked.push(f);
       onIncremental?.(f);
     }
   }
 
-  if (picked.length === 0) {
+  // Only use mock stubs when Supabase is not configured — mock IDs are slugs,
+  // not UUIDs, so they can never be resolved by loadFigureById and would show
+  // "인물을 찾을 수 없습니다." on the detail screen.
+  if (picked.length === 0 && !isSupabaseConfigured) {
     const fallback = mockFigures.slice(0, count);
     fallback.forEach((f) => onIncremental?.(f));
     return fallback;

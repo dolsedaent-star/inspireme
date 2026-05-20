@@ -123,37 +123,13 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
           </Pressable>
         </View>
 
-        {(loading || generating) && (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={colors.gold} />
-            {generating && (
-              <Text style={styles.loadingText}>
-                새 위인을 모셔오는 중… (15초 정도 걸려요)
-              </Text>
-            )}
-          </View>
-        )}
-
         {error && !loading && (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>불러오기 실패: {error}</Text>
           </View>
         )}
 
-        {!loading && exhausted && (
-          <View style={styles.exhaustedBox}>
-            <Text style={styles.exhaustedTitle}>모든 위인을 다 만나셨습니다.</Text>
-            <Text style={styles.exhaustedDesc}>
-              초기화하면 처음부터 다시 만날 수 있어요. 더 많은 위인은 곧 추가됩니다.
-            </Text>
-            <Pressable onPress={onResetAll} style={styles.exhaustedBtn}>
-              <Text style={styles.exhaustedBtnText}>기록 초기화</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {!loading &&
-          !exhausted &&
+        {!exhausted &&
           figures.slice(0, 3).map((figure, i) => (
             <FigureCard
               key={figure.id}
@@ -165,6 +141,31 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
               onUnlock={() => {}}
             />
           ))}
+
+        {(loading || generating) && figures.length < 3 && (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator color={colors.gold} />
+            {(generating || figures.length === 0) && (
+              <Text style={styles.loadingText}>
+                {figures.length === 0
+                  ? '위인을 불러오는 중…'
+                  : `${figures.length}명 완료 — 나머지 생성 중… (잠시만요)`}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {!loading && !generating && exhausted && (
+          <View style={styles.exhaustedBox}>
+            <Text style={styles.exhaustedTitle}>모든 위인을 다 만나셨습니다.</Text>
+            <Text style={styles.exhaustedDesc}>
+              초기화하면 처음부터 다시 만날 수 있어요. 더 많은 위인은 곧 추가됩니다.
+            </Text>
+            <Pressable onPress={onResetAll} style={styles.exhaustedBtn}>
+              <Text style={styles.exhaustedBtnText}>기록 초기화</Text>
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.footerNote}>
           <Text style={styles.footerText}>

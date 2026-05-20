@@ -1,5 +1,6 @@
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { GalleryItem } from '../shared';
+import { wikiImageSource } from '../services/images';
 import { colors, radii, spacing, type } from '../theme';
 
 /**
@@ -17,7 +18,7 @@ export function Gallery({ items }: { items: GalleryItem[] }) {
     >
       {items.map((item, i) => (
         <View key={i} style={styles.card}>
-          <Image source={{ uri: item.url }} resizeMode="cover" style={styles.photo} />
+          <Image source={wikiImageSource(item.url, 800) ?? { uri: item.url }} resizeMode="cover" style={styles.photo} />
           <View style={styles.captionBlock}>
             {item.year != null && <Text style={styles.year}>{item.year}</Text>}
             {item.caption_ko && (

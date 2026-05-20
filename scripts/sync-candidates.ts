@@ -9,7 +9,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { sb } from './lib/supabase.js';
 
-type Row = { slug: string; name_en: string; name_ko: string; categories: string[] };
+type Row = {
+  slug: string;
+  name_en: string;
+  name_ko: string;
+  categories: string[];
+  country: string | null;
+  deceased: boolean;
+};
 
 function loadCsv(): Row[] {
   const csv = readFileSync(resolve(import.meta.dirname, 'names.csv'), 'utf8').trim();
@@ -26,12 +33,16 @@ function loadCsv(): Row[] {
         name_en: rec.name_en,
         name_ko: rec.name_ko,
         categories: rec.categories.split('|').filter(Boolean),
+        country: rec.country || null,
+        deceased: rec.deceased !== 'false',
       };
     });
 }
 
 const rows = loadCsv();
 console.log(`Syncing ${rows.length} candidates…`);
+const living = rows.filter((r) => !r.deceased).map((r) => r.slug);
+if (living.length) console.log(`Skipping living people: ${living.join(', ')}`);
 
 const { error } = await sb.from('figure_candidates').upsert(
   rows.map((r) => ({
@@ -39,6 +50,8 @@ const { error } = await sb.from('figure_candidates').upsert(
     name_en: r.name_en,
     name_ko: r.name_ko,
     categories: r.categories,
+    country: r.country,
+    deceased: r.deceased,
   })),
   { onConflict: 'slug' },
 );

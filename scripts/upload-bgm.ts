@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { sb } from './lib/supabase.js';
 
-const BGM_DIR = resolve(import.meta.dirname, '..', 'bgm');
+const BGM_DIR = resolve(import.meta.dirname, '..', '..', 'bgm');
 const BUCKET = 'bgm';
 
 async function ensureBucket() {

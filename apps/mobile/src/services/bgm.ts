@@ -1,127 +1,142 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Audio } from 'expo-av';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 
 const BUCKET = 'bgm';
+const MAX_VOL = 0.35;
+const FADE_STEPS = 7;
+const FADE_MS = 50;
 
-/**
- * Stream BGM tracks from Supabase Storage so we can add/replace tracks
- * without rebuilding the app — just `npm run upload-bgm`.
- *
- * - lists all .mp3 in the `bgm` bucket
- * - shuffles, plays one randomly, rotates on track end
- * - falls back to the bundled bgm1.mp3 if listing fails (offline / no env)
- * - exposes muted state + toggle
- */
-type Source = string | number;
+export type BgmMood = 'default' | 'young' | 'hardship' | 'death';
+
+type AVSource = { uri: string } | number;
+type Pools = Record<BgmMood, AVSource[]>;
+
+const MOOD_PREFIXES: Record<BgmMood, string[]> = {
+  default:  ['bgm'],
+  young:    ['young'],
+  hardship: ['pain', 'tension'],
+  death:    ['die'],
+};
 
 export function useBgm() {
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const queueRef = useRef<Source[]>([]);
-  const cursorRef = useRef(0);
-  const cancelledRef = useRef(false);
-  const mutedRef = useRef(false);
+  const soundRef    = useRef<Audio.Sound | null>(null);
+  const mutedRef    = useRef(false);
+  const genRef      = useRef(0);
+  const currentMood = useRef<BgmMood>('young');
+  const poolsRef    = useRef<Pools>({ default: [], young: [], hardship: [], death: [] });
+  const readyRef    = useRef(false);
+  const pendingMood = useRef<BgmMood | null>(null);
   const [muted, setMuted] = useState(false);
 
   useEffect(() => {
     mutedRef.current = muted;
-    soundRef.current?.setVolumeAsync(muted ? 0 : 0.35).catch(() => {});
+    soundRef.current?.setVolumeAsync(muted ? 0 : MAX_VOL).catch(() => {});
   }, [muted]);
 
   useEffect(() => {
-    cancelledRef.current = false;
+    let alive = true;
 
     (async () => {
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true }).catch(() => {});
-      const queue = await buildQueue();
-      if (cancelledRef.current) return;
-      queueRef.current = queue;
-      cursorRef.current = 0;
-      if (queue.length === 0) return;
-      await playNext();
+      const pools = await buildPools();
+      if (!alive) return;
+      poolsRef.current = pools;
+      readyRef.current = true;
+      const start = pendingMood.current ?? 'young';
+      pendingMood.current = null;
+      await playMood(start, ++genRef.current, pools);
     })();
 
     return () => {
-      cancelledRef.current = true;
+      alive = false;
+      genRef.current++;
       soundRef.current?.unloadAsync().catch(() => {});
       soundRef.current = null;
     };
   }, []);
 
-  async function playNext() {
-    if (cancelledRef.current) return;
-    const queue = queueRef.current;
-    if (queue.length === 0) return;
+  const setMood = useCallback((mood: BgmMood) => {
+    if (mood === currentMood.current) return;
+    currentMood.current = mood;
+    if (!readyRef.current) { pendingMood.current = mood; return; }
+    void playMood(mood, ++genRef.current, poolsRef.current);
+  }, []);
 
-    const source = queue[cursorRef.current % queue.length];
-    cursorRef.current += 1;
+  async function playMood(mood: BgmMood, gen: number, pools: Pools) {
+    const bucket = pools[mood];
+    if (bucket.length === 0) return;
 
+    // Fade out current track before switching
+    const prev = soundRef.current;
+    if (prev) {
+      for (let i = FADE_STEPS; i >= 0; i--) {
+        if (genRef.current !== gen) return;
+        await prev.setVolumeAsync((MAX_VOL * i) / FADE_STEPS).catch(() => {});
+        await delay(FADE_MS);
+      }
+      if (genRef.current !== gen) return;
+      await prev.unloadAsync().catch(() => {});
+      soundRef.current = null;
+    }
+    if (genRef.current !== gen) return;
+
+    const src = bucket[Math.floor(Math.random() * bucket.length)];
     try {
-      // Unload previous before loading next.
-      await soundRef.current?.unloadAsync().catch(() => {});
       const { sound } = await Audio.Sound.createAsync(
-        typeof source === 'string' ? { uri: source } : source,
-        {
-          // Loop only when there is a single track. With multiple tracks we
-          // advance manually via onPlaybackStatusUpdate.
-          isLooping: queue.length === 1,
-          volume: mutedRef.current ? 0 : 0.35,
-          shouldPlay: true,
-        },
+        src as Parameters<typeof Audio.Sound.createAsync>[0],
+        { isLooping: true, volume: mutedRef.current ? 0 : MAX_VOL, shouldPlay: true },
       );
-      if (cancelledRef.current) {
-        sound.unloadAsync().catch(() => {});
-        return;
-      }
+      if (genRef.current !== gen) { sound.unloadAsync().catch(() => {}); return; }
       soundRef.current = sound;
-      if (queue.length > 1) {
-        sound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded && status.didJustFinish) {
-            // schedule async; can't await inside the callback safely
-            void playNext();
-          }
-        });
-      }
     } catch (e) {
-      console.log('[bgm] failed to play track', e);
+      console.warn('[bgm] failed to load track', e);
     }
   }
 
-  return { enabled: true, muted, toggleMute: () => setMuted((v) => !v) };
+  return { enabled: true, muted, toggleMute: () => setMuted((v) => !v), setMood };
 }
 
-async function buildQueue(): Promise<Source[]> {
-  const fallback: Source[] = [require('../../assets/bgm/bgm1.mp3')];
+async function buildPools(): Promise<Pools> {
+  const pools: Pools = { default: [], young: [], hardship: [], death: [] };
+  const bundled = require('../../assets/bgm/bgm1.mp3') as number;
 
-  if (!isSupabaseConfigured) return fallback;
+  if (!isSupabaseConfigured) {
+    pools.default = pools.young = pools.hardship = pools.death = [bundled];
+    return pools;
+  }
 
   try {
     const sb = getSupabase();
     const { data, error } = await sb.storage.from(BUCKET).list('', {
-      limit: 100,
+      limit: 200,
       sortBy: { column: 'name', order: 'asc' },
     });
     if (error) throw error;
 
-    const mp3s = (data ?? []).filter((f) => f.name.toLowerCase().endsWith('.mp3'));
-    if (mp3s.length === 0) return fallback;
-
-    const urls: string[] = mp3s.map((f) => {
-      const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(f.name);
-      return pub.publicUrl;
-    });
-    return shuffle(urls);
+    for (const file of (data ?? []).filter((f) => f.name.toLowerCase().endsWith('.mp3'))) {
+      const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(file.name);
+      const base = file.name.toLowerCase().replace(/\.mp3$/, '');
+      let assigned = false;
+      for (const [mood, prefixes] of Object.entries(MOOD_PREFIXES) as [BgmMood, string[]][]) {
+        if (prefixes.some((p) => base.startsWith(p))) {
+          pools[mood].push({ uri: pub.publicUrl });
+          assigned = true;
+          break;
+        }
+      }
+      if (!assigned) pools.default.push({ uri: pub.publicUrl });
+    }
   } catch (e) {
-    console.log('[bgm] could not list bucket, falling back to bundled track', e);
-    return fallback;
+    console.warn('[bgm] bucket fetch failed, using bundled track', e);
   }
+
+  // Fallback: any empty mood bucket → use bundled track
+  for (const mood of Object.keys(pools) as BgmMood[]) {
+    if (pools[mood].length === 0) pools[mood] = [bundled];
+  }
+
+  return pools;
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  const out = arr.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
+const delay = (ms: number) => new Promise<void>((res) => setTimeout(res, ms));

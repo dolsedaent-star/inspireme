@@ -54,16 +54,20 @@ function curvePosition(figure: Figure, age: number) {
 
 function comparisonCopy(matching: TimelineEvent | null, figure: Figure, age: number): string {
   if (!matching) {
-    return `${figure.name_ko}는 당신과 같은 ${age}세 무렵에도 자신의 길을 찾아가는 중이었습니다.`;
+    return `${figure.name_ko}도 ${age}세 무렵, 여전히 자신의 길을 찾아가는 시간을 보내고 있었습니다.`;
   }
-  const ageDiff = age - matching.age;
+  const ageDiff = age - matching.age; // 양수 = 유저가 더 나이 많음
+  const title = matching.title_ko;
+
   if (Math.abs(ageDiff) <= 1) {
-    return `${figure.name_ko}는 ${matching.age}세, 지금의 당신과 같은 나이에 "${matching.title_ko}"의 순간을 맞이했습니다.`;
+    return `${figure.name_ko}도 ${matching.age}세에 "${title}"의 시기를 보내고 있었습니다.`;
   }
   if (ageDiff > 0) {
-    return `${figure.name_ko}는 ${matching.age}세에 "${matching.title_ko}"을(를) 경험했습니다. 당신은 그보다 ${ageDiff}년 더 길게 준비할 시간을 가졌습니다.`;
+    // 유저 나이보다 ageDiff살 전에 그 일이 있었음
+    return `당신의 나이보다 ${ageDiff}살 전, ${figure.name_ko}는 "${title}"의 시기를 보내고 있었습니다.`;
   }
-  return `${figure.name_ko}는 ${matching.age}세에 "${matching.title_ko}"을(를) 경험했습니다. 당신에게는 아직 ${-ageDiff}년의 여유가 있습니다.`;
+  // 유저 나이보다 -ageDiff살 후에 그 일이 있었음
+  return `${figure.name_ko}는 지금의 당신보다 ${-ageDiff}살 후인 ${matching.age}세에 "${title}"의 시기를 맞이했습니다.`;
 }
 
 export function personalize(figure: Figure, user: UserProfile): PersonalizedInsight {

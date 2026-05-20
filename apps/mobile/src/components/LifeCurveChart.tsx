@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { Svg, Circle, Path, Line, SvgText } from './svg';
 import type { LifeCurvePoint, UserProfile } from '../shared';
@@ -88,10 +88,26 @@ export function LifeCurveChart({
         />
         {/* Curve */}
         <Path d={smoothPath(pts)} stroke={colors.gold} strokeWidth={2.5} fill="none" />
-        {/* Data points */}
-        {pts.map((p, i) => (
-          <Circle key={i} cx={p.x} cy={p.y} r={4} fill={colors.gold} />
-        ))}
+        {/* Data points + labels */}
+        {pts.map((p, i) => {
+          // Alternate labels above/below to reduce overlap
+          const above = i % 2 === 0;
+          const labelY = above ? p.y - 10 : p.y + 20;
+          return (
+            <React.Fragment key={i}>
+              <Circle cx={p.x} cy={p.y} r={4} fill={colors.gold} />
+              <SvgText
+                x={p.x}
+                y={labelY}
+                fill={colors.textSecondary}
+                fontSize={9}
+                textAnchor="middle"
+              >
+                {p.label}
+              </SvgText>
+            </React.Fragment>
+          );
+        })}
         {/* You marker */}
         {youPt && (
           <>

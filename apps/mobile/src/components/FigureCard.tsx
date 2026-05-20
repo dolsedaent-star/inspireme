@@ -24,6 +24,7 @@ export interface FigureCardProps {
   onUnlock: () => void;
 }
 
+
 export function FigureCard({
   figure,
   locked,
@@ -76,11 +77,6 @@ export function FigureCard({
             </View>
           );
         })()}
-        {figure.era ? (
-          <View style={[styles.eraPill, styles.eraPillMuted]}>
-            <Text style={[styles.eraText, styles.eraTextMuted]}>{figure.era}</Text>
-          </View>
-        ) : null}
       </View>
 
       {/* Bottom content */}
@@ -97,9 +93,6 @@ export function FigureCard({
 
         <View style={styles.divider} />
 
-        <Text style={styles.quote} numberOfLines={3}>
-          “{figure.data.quote_ko}”
-        </Text>
         <Text style={styles.teaser} numberOfLines={2}>
           {teaser}
         </Text>
@@ -134,12 +127,12 @@ const styles = StyleSheet.create({
   cardFeatured: { borderColor: colors.gold, borderWidth: 1.5 },
   noPhotoBg: { backgroundColor: colors.bgElevated },
 
-  // Fake gradient: a global low-alpha scrim + three bottom bands at increasing alpha.
-  scrim1: { backgroundColor: 'rgba(9, 11, 18, 0.35)' },
+  // Fake gradient: 얼굴이 덜 가리도록 상단 scrim 약화, 하단 텍스트 영역만 어둡게
+  scrim1: { backgroundColor: 'rgba(9, 11, 18, 0.15)' },
   scrimBand: { position: 'absolute', left: 0, right: 0, bottom: 0 },
-  scrim2: { height: '70%', backgroundColor: 'rgba(9, 11, 18, 0.45)' },
-  scrim3: { height: '50%', backgroundColor: 'rgba(9, 11, 18, 0.7)' },
-  scrim4: { height: '32%', backgroundColor: 'rgba(9, 11, 18, 0.92)' },
+  scrim2: { height: '45%', backgroundColor: 'rgba(9, 11, 18, 0.5)' },
+  scrim3: { height: '32%', backgroundColor: 'rgba(9, 11, 18, 0.75)' },
+  scrim4: { height: '22%', backgroundColor: 'rgba(9, 11, 18, 0.92)' },
 
   topRow: {
     position: 'absolute',
