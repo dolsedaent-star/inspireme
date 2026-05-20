@@ -27,7 +27,11 @@ export function TimelineList({
   profile: UserProfile | null;
 }) {
   const userStage = profile ? stageForAge(profile.age) : null;
-  const sorted = [...events].sort((a, b) => a.age - b.age);
+  // Exclude late-life / death events — they live in the Epilogue section so
+  // the reader's curiosity builds naturally toward the end.
+  const sorted = [...events]
+    .filter((e) => e.stage !== 'later' && e.category !== 'later_years')
+    .sort((a, b) => a.age - b.age);
 
   return (
     <View style={styles.col}>

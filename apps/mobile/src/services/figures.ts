@@ -66,14 +66,41 @@ function shuffle<T>(arr: T[]): T[] {
  *   generation fails or candidates run out.
  * - `exclude` skips figures already shown / viewed.
  */
+function fieldOverlap(rowFields: string[] | null | undefined, userFields: string[]): number {
+  if (!rowFields?.length || !userFields.length) return 0;
+  const set = new Set(userFields);
+  return rowFields.filter((f) => set.has(f)).length;
+}
+
+/**
+ * Rank a row pool so user-fields overlap surfaces first, then shuffles within
+ * each affinity bucket so repeats are rare.
+ */
+function rankByAffinity<T extends { fields: string[] | null }>(rows: T[], userFields: string[]): T[] {
+  if (!userFields.length) return shuffle(rows);
+  const buckets = new Map<number, T[]>();
+  for (const r of rows) {
+    const k = fieldOverlap(r.fields, userFields);
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k)!.push(r);
+  }
+  const ordered: T[] = [];
+  for (const k of [...buckets.keys()].sort((a, b) => b - a)) {
+    ordered.push(...shuffle(buckets.get(k)!));
+  }
+  return ordered;
+}
+
 export async function loadDailyFigures(opts: {
   exclude?: string[];
   count?: number;
   preferDynamic?: boolean;
+  userFields?: string[];
 } = {}): Promise<Figure[]> {
   const count = opts.count ?? 3;
   const exclude = new Set(opts.exclude ?? []);
   const preferDynamic = opts.preferDynamic ?? false;
+  const userFields = opts.userFields ?? [];
 
   if (!isSupabaseConfigured) {
     return shuffle(mockFigures.filter((f) => !exclude.has(f.id))).slice(0, count);
@@ -87,16 +114,14 @@ export async function loadDailyFigures(opts: {
   let picked: Figure[] = [];
 
   if (preferDynamic) {
-    // Try to generate fresh figures in parallel (3 at a time = ~one Gemini
-    // batch on free tier). Each call is ~10-20s; running them concurrently
-    // keeps the user wait close to a single call's duration.
+    // Try to generate fresh figures in parallel — user-field affinity first.
     const used = new Set(exclude);
     const candidates: Awaited<ReturnType<typeof pickNextCandidate>>[] = [];
     for (let i = 0; i < count; i++) {
-      const c = await pickNextCandidate(Array.from(used));
+      const c = await pickNextCandidate(Array.from(used), userFields);
       if (!c) break;
       candidates.push(c);
-      used.add(c.slug); // prevent same candidate twice in this batch
+      used.add(c.slug);
     }
     const generated = (await Promise.all(
       candidates.filter((c): c is NonNullable<typeof c> => c !== null).map((c) => generateAndCacheFigure(c)),
@@ -104,11 +129,12 @@ export async function loadDailyFigures(opts: {
     picked.push(...generated);
   }
 
-  // Fill remaining slots from cached pool.
+  // Fill remaining slots from cached pool, weighted by field affinity.
   if (picked.length < count) {
     const used = new Set([...exclude, ...picked.map((f) => f.id)]);
     const remaining = cachedPool.filter((r) => !used.has(r.id));
-    picked.push(...shuffle(remaining).slice(0, count - picked.length).map(rowToFigure));
+    const ranked = rankByAffinity(remaining, userFields);
+    picked.push(...ranked.slice(0, count - picked.length).map(rowToFigure));
   }
 
   if (picked.length === 0) return mockFigures.slice(0, count);

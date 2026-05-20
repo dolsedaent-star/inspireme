@@ -25,14 +25,20 @@ export function Epilogue({ figure }: { figure: Figure }) {
       ? figure.death_year - figure.birth_year
       : null;
 
+  // Prefer a gallery photo for the closing band so we're not repeating the
+  // Hero cover image again. If no gallery is available, skip the band.
+  const lateGalleryItem = figure.data.gallery?.[figure.data.gallery.length - 1];
+
   return (
     <View style={styles.col}>
-      <PhotoBand
-        imageUrl={figure.cover_image_url}
-        caption={lastCurvePoint ? `마지막 — ${lastCurvePoint.label_ko}` : undefined}
-        variant="mono"
-        height={200}
-      />
+      {lateGalleryItem && (
+        <PhotoBand
+          imageUrl={lateGalleryItem.url}
+          caption={lastCurvePoint ? `마지막 — ${lastCurvePoint.label_ko}` : undefined}
+          variant="mono"
+          height={200}
+        />
+      )}
       <View style={styles.metaRow}>
         {ageAtDeath !== null && (
           <View style={styles.metaPill}>

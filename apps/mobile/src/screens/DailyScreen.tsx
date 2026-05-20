@@ -30,6 +30,8 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
   // viewed + currently-on-screen are both excluded.
   const [generating, setGenerating] = useState(false);
 
+  const userFields = profile?.fields ?? [];
+
   const fetchFigures = useCallback(
     async (alsoExclude: string[] = [], opts: { preferDynamic?: boolean; allowReset?: boolean } = {}) => {
       const { preferDynamic = false, allowReset = true } = opts;
@@ -38,10 +40,10 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
       setError(null);
       try {
         const exclude = [...viewedIds, ...alsoExclude];
-        const list = await loadDailyFigures({ exclude, preferDynamic });
+        const list = await loadDailyFigures({ exclude, preferDynamic, userFields });
         if (list.length === 0 && allowReset && viewedIds.length > 0) {
           await resetViewed();
-          const fresh = await loadDailyFigures({ exclude: alsoExclude });
+          const fresh = await loadDailyFigures({ exclude: alsoExclude, userFields });
           setFigures(fresh);
           setExhausted(fresh.length === 0);
           return;
@@ -55,7 +57,7 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
         setGenerating(false);
       }
     },
-    [viewedIds, resetViewed],
+    [viewedIds, resetViewed, userFields],
   );
 
   // Re-fetch on focus (fresh entry + return from detail).

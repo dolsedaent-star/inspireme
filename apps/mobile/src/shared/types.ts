@@ -45,6 +45,15 @@ export interface LifeCurvePoint {
   label_ko: string;
 }
 
+export interface GalleryItem {
+  /** Public URL (Supabase Storage if mirrored, otherwise Wikimedia direct). */
+  url: string;
+  /** Short Korean caption — period / event the photo represents. */
+  caption_ko?: string;
+  /** Approximate year. */
+  year?: number;
+}
+
 export interface FigureData {
   quote_ko: string;
   quote_en: string;
@@ -60,6 +69,8 @@ export interface FigureData {
   comparison_ko: string;
   today_question_ko: string;
   image_prompt: string;
+  /** Extra photos beyond the cover, sourced from Wikipedia page media. */
+  gallery?: GalleryItem[];
 }
 
 export interface FigureSources {

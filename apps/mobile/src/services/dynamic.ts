@@ -12,7 +12,14 @@
  * server-side and an ad-unlock counter can gate the call.
  */
 
-import type { Figure, FigureCategory, FigureData, FigureSources, TimelineEvent } from '../shared';
+import type {
+  Figure,
+  FigureCategory,
+  FigureData,
+  FigureSources,
+  GalleryItem,
+  TimelineEvent,
+} from '../shared';
 import { getSupabase, isSupabaseConfigured } from './supabase';
 
 const GEMINI_MODEL = process.env.EXPO_PUBLIC_GEMINI_MODEL || 'gemini-2.5-flash';
@@ -49,8 +56,15 @@ const VALID_CATEGORIES = new Set([
 // Candidate picking
 // ─────────────────────────────────────────────────────────────
 
+function affinityScore(candidateCategories: string[], userFields: string[]): number {
+  if (!userFields.length || !candidateCategories.length) return 0;
+  const u = new Set(userFields);
+  return candidateCategories.filter((c) => u.has(c)).length;
+}
+
 export async function pickNextCandidate(
   excludeFigureIds: string[] = [],
+  userFields: string[] = [],
 ): Promise<Candidate | null> {
   if (!isSupabaseConfigured) return null;
   const sb = getSupabase();
@@ -67,18 +81,22 @@ export async function pickNextCandidate(
   );
 
   // Prefer fully new (not in figures yet)
-  const fresh = candidates.filter((c) => !existing.has(c.slug));
-  if (fresh.length > 0) {
-    return fresh[Math.floor(Math.random() * fresh.length)] as Candidate;
-  }
+  const fresh = (candidates as Candidate[]).filter((c) => !existing.has(c.slug));
+  const pool = fresh.length > 0 ? fresh : (candidates as Candidate[]).filter((c) => !excludedSlugs.has(c.slug));
+  if (pool.length === 0) return null;
 
-  // Otherwise pick existing-but-not-viewed
-  const reusable = candidates.filter((c) => !excludedSlugs.has(c.slug));
-  if (reusable.length > 0) {
-    return reusable[Math.floor(Math.random() * reusable.length)] as Candidate;
+  // Weight by user-field affinity: pick top affinity bucket and shuffle within.
+  if (userFields.length === 0) {
+    return pool[Math.floor(Math.random() * pool.length)];
   }
-
-  return null;
+  const buckets = new Map<number, Candidate[]>();
+  for (const c of pool) {
+    const k = affinityScore(c.categories, userFields);
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k)!.push(c);
+  }
+  const bestBucket = buckets.get(Math.max(...buckets.keys()))!;
+  return bestBucket[Math.floor(Math.random() * bestBucket.length)];
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -148,7 +166,7 @@ async function lookupWiki(name_en: string, name_ko: string | null): Promise<Wiki
 // Image mirror to Supabase Storage
 // ─────────────────────────────────────────────────────────────
 
-async function mirrorImage(slug: string, sourceUrl: string | undefined): Promise<string | null> {
+async function mirrorImage(path: string, sourceUrl: string | undefined): Promise<string | null> {
   if (!sourceUrl) return null;
   try {
     const res = await fetch(sourceUrl, { headers: { 'User-Agent': WIKI_UA } });
@@ -158,16 +176,91 @@ async function mirrorImage(slug: string, sourceUrl: string | undefined): Promise
     const blob = await res.blob();
 
     const sb = getSupabase();
-    const path = `${slug}.${ext}`;
+    const finalPath = path.includes('.') ? path : `${path}.${ext}`;
     const { error } = await sb.storage
       .from('figure-images')
-      .upload(path, blob, { contentType: ct, upsert: true });
+      .upload(finalPath, blob, { contentType: ct, upsert: true });
     if (error) return null;
-    const { data } = sb.storage.from('figure-images').getPublicUrl(path);
+    const { data } = sb.storage.from('figure-images').getPublicUrl(finalPath);
     return data.publicUrl;
   } catch {
     return null;
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Gallery — additional Wikipedia page media for the detail screen
+// ─────────────────────────────────────────────────────────────
+
+async function fetchPageMedia(
+  title: string,
+  lang: 'en' | 'ko',
+): Promise<any[]> {
+  try {
+    const res = await fetch(
+      `https://${lang}.wikipedia.org/api/rest_v1/page/media-list/${encodeURIComponent(title)}`,
+      { headers: { 'User-Agent': WIKI_UA } },
+    );
+    if (!res.ok) return [];
+    const json: any = await res.json();
+    return Array.isArray(json.items) ? json.items : [];
+  } catch {
+    return [];
+  }
+}
+
+function cleanCaption(item: any): string | undefined {
+  const raw =
+    item?.caption?.text ??
+    item?.title?.replace(/^File:/, '')?.replace(/\.\w+$/, '')?.replace(/[_-]+/g, ' ');
+  if (!raw) return undefined;
+  return String(raw).trim().slice(0, 90);
+}
+
+async function buildGallery(
+  slug: string,
+  name_en: string,
+  name_ko: string | null,
+  coverUrl: string | undefined,
+): Promise<GalleryItem[]> {
+  // Try English first (richer media), then Korean as backup.
+  let items = await fetchPageMedia(name_en, 'en');
+  if (items.length === 0 && name_ko) {
+    items = await fetchPageMedia(name_ko, 'ko');
+  }
+
+  // Keep image types, skip the cover file itself, skip obvious non-portraits.
+  const coverBase = coverUrl?.split('/').pop()?.toLowerCase() ?? '';
+  const portraits = items.filter((i: any) => {
+    if (i.type !== 'image') return false;
+    if (!i.srcset?.length) return false;
+    const title = String(i.title ?? '').toLowerCase();
+    if (title.includes('logo') || title.includes('signature') || title.includes('symbol') || title.includes('map.')) {
+      return false;
+    }
+    if (coverBase && title.includes(coverBase.replace(/^\d+px-/, ''))) return false;
+    return true;
+  });
+
+  const picks = portraits.slice(0, 4);
+  const gallery: GalleryItem[] = [];
+
+  // Mirror sequentially to be polite to Wikimedia.
+  for (let i = 0; i < picks.length; i++) {
+    const item = picks[i];
+    const srcset = item.srcset ?? [];
+    const last = srcset[srcset.length - 1];
+    const raw: string | undefined = last?.src;
+    if (!raw) continue;
+    const url = raw.startsWith('//') ? `https:${raw}` : raw;
+    const mirrored = await mirrorImage(`${slug}-g${i + 1}`, url);
+    if (!mirrored) continue;
+    gallery.push({
+      url: mirrored,
+      caption_ko: cleanCaption(item),
+    });
+  }
+  return gallery;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -340,6 +433,8 @@ export async function generateAndCacheFigure(c: Candidate): Promise<Figure | nul
   }
 
   const imageUrl = await mirrorImage(c.slug, wiki.image_url);
+  // Pull additional photos from the Wikipedia page (best-effort).
+  data.gallery = await buildGallery(c.slug, c.name_en, c.name_ko, wiki.image_url);
 
   const sb = getSupabase();
   const era =

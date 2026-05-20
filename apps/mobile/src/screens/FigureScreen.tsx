@@ -15,6 +15,7 @@ import { InsightCards } from '../components/InsightCards';
 import { TodayQuestion } from '../components/TodayQuestion';
 import { Comparison } from '../components/Comparison';
 import { Epilogue } from '../components/Epilogue';
+import { Gallery } from '../components/Gallery';
 import { PhotoBand } from '../components/PhotoBand';
 import { SourcesBlock } from '../components/SourcesBlock';
 import { loadFigureById } from '../services/figures';
@@ -99,18 +100,8 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
           </Section>
 
           <Section title="추락과 도약">
-            <Comparison
-              failure={data.failure_event}
-              success={data.success_event}
-              imageUrl={figure.cover_image_url}
-            />
+            <Comparison failure={data.failure_event} success={data.success_event} />
           </Section>
-
-          <PhotoBand
-            imageUrl={figure.cover_image_url}
-            caption={`“${data.quote_ko}”`}
-            height={240}
-          />
 
           <Section title="인생 곡선">
             <LifeCurveChart curve={data.life_curve} profile={profile} />
@@ -120,6 +111,12 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
           <Section title="일대기">
             <TimelineList events={data.timeline} profile={profile} />
           </Section>
+
+          {data.gallery && data.gallery.length > 0 && (
+            <Section title="주요 순간">
+              <Gallery items={data.gallery} />
+            </Section>
+          )}
 
           <Section title="통찰 셋">
             <InsightCards insights={data.insights_ko} />
