@@ -75,7 +75,7 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Hero figure={figure} onBack={() => navigation.goBack()} />
+        <Hero figure={figure} onBack={() => navigation.goBack()} userFields={profile?.fields} />
 
         <View style={styles.body}>
           {insight && (

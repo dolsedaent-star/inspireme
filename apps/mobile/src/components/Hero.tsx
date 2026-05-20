@@ -1,12 +1,22 @@
 import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Figure } from '../shared';
+import type { Figure, FigureCategory } from '../shared';
+import { labelFor, matchedCategory } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
 import { wikiImageSource } from '../services/images';
 
 const { height: SCREEN_H } = Dimensions.get('window');
 const HERO_H = Math.round(SCREEN_H * 0.7);
 
-export function Hero({ figure, onBack }: { figure: Figure; onBack: () => void }) {
+export function Hero({
+  figure,
+  onBack,
+  userFields,
+}: {
+  figure: Figure;
+  onBack: () => void;
+  userFields?: FigureCategory[];
+}) {
+  const match = matchedCategory(figure.categories, userFields);
   return (
     <View style={styles.wrap}>
       {figure.cover_image_url ? (
@@ -29,11 +39,20 @@ export function Hero({ figure, onBack }: { figure: Figure; onBack: () => void })
       </Pressable>
 
       <View style={styles.topMeta}>
-        <View style={styles.pill}>
-          <Text style={styles.pillText}>
-            {[figure.era, figure.country].filter(Boolean).join(' · ') || '아카이브'}
-          </Text>
-        </View>
+        {match && (
+          <View style={[styles.pill, match.matched && styles.pillMatched]}>
+            <Text style={[styles.pillText, match.matched && styles.pillTextMatched]}>
+              {labelFor(match.category)}
+            </Text>
+          </View>
+        )}
+        {(figure.era || figure.country) && (
+          <View style={styles.pill}>
+            <Text style={styles.pillText}>
+              {[figure.era, figure.country].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.bottom}>
@@ -81,6 +100,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.xxl,
     right: spacing.md,
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
   },
   pill: {
     paddingHorizontal: spacing.sm + 2,
@@ -90,7 +112,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(217, 179, 106, 0.4)',
   },
+  pillMatched: { backgroundColor: colors.gold, borderColor: colors.gold },
   pillText: { ...type.label, color: colors.gold, fontSize: 10 },
+  pillTextMatched: { color: colors.bg, fontWeight: '700' },
 
   bottom: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: spacing.lg },
   eyebrow: { ...type.label, color: colors.gold, marginBottom: spacing.sm },

@@ -96,23 +96,19 @@ export async function pickNextCandidate(
   const fresh = (candidates as Candidate[]).filter(
     (c) => !existing.has(c.slug) && !inFlight.has(c.slug),
   );
-  const pool = fresh.length > 0
+  let pool = fresh.length > 0
     ? fresh
     : (candidates as Candidate[]).filter((c) => !excludedSlugs.has(c.slug) && !inFlight.has(c.slug));
   if (pool.length === 0) return null;
 
-  // Weight by user-field affinity: pick top affinity bucket and shuffle within.
-  if (userFields.length === 0) {
-    return pool[Math.floor(Math.random() * pool.length)];
+  // Strict field filter — never return a candidate outside the user's
+  // chosen fields. (If none match, return null and let the caller decide
+  // what to do — usually fall back to the cached prebuilt pool.)
+  if (userFields.length > 0) {
+    pool = pool.filter((c) => affinityScore(c.categories, userFields) > 0);
+    if (pool.length === 0) return null;
   }
-  const buckets = new Map<number, Candidate[]>();
-  for (const c of pool) {
-    const k = affinityScore(c.categories, userFields);
-    if (!buckets.has(k)) buckets.set(k, []);
-    buckets.get(k)!.push(c);
-  }
-  const bestBucket = buckets.get(Math.max(...buckets.keys()))!;
-  return bestBucket[Math.floor(Math.random() * bestBucket.length)];
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 // ─────────────────────────────────────────────────────────────

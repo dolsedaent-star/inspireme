@@ -72,23 +72,10 @@ function fieldOverlap(rowFields: string[] | null | undefined, userFields: string
   return rowFields.filter((f) => set.has(f)).length;
 }
 
-/**
- * Rank a row pool so user-fields overlap surfaces first, then shuffles within
- * each affinity bucket so repeats are rare.
- */
-function rankByAffinity<T extends { fields: string[] | null }>(rows: T[], userFields: string[]): T[] {
-  if (!userFields.length) return shuffle(rows);
-  const buckets = new Map<number, T[]>();
-  for (const r of rows) {
-    const k = fieldOverlap(r.fields, userFields);
-    if (!buckets.has(k)) buckets.set(k, []);
-    buckets.get(k)!.push(r);
-  }
-  const ordered: T[] = [];
-  for (const k of [...buckets.keys()].sort((a, b) => b - a)) {
-    ordered.push(...shuffle(buckets.get(k)!));
-  }
-  return ordered;
+/** Filter rows down to ones that match at least one user field. */
+function filterByFields<T extends { fields: string[] | null }>(rows: T[], userFields: string[]): T[] {
+  if (!userFields.length) return rows;
+  return rows.filter((r) => fieldOverlap(r.fields, userFields) > 0);
 }
 
 export async function loadDailyFigures(opts: {
@@ -96,14 +83,19 @@ export async function loadDailyFigures(opts: {
   count?: number;
   preferDynamic?: boolean;
   userFields?: string[];
+  /** Called as each figure becomes available, so the UI can paint progressively. */
+  onIncremental?: (figure: Figure) => void;
 } = {}): Promise<Figure[]> {
   const count = opts.count ?? 3;
   const exclude = new Set(opts.exclude ?? []);
   const preferDynamic = opts.preferDynamic ?? false;
   const userFields = opts.userFields ?? [];
+  const onIncremental = opts.onIncremental;
 
   if (!isSupabaseConfigured) {
-    return shuffle(mockFigures.filter((f) => !exclude.has(f.id))).slice(0, count);
+    const list = shuffle(mockFigures.filter((f) => !exclude.has(f.id))).slice(0, count);
+    list.forEach((f) => onIncremental?.(f));
+    return list;
   }
 
   const sb = getSupabase();
@@ -111,35 +103,50 @@ export async function loadDailyFigures(opts: {
   if (error) throw error;
   const cachedPool = (rows ?? []).filter((r) => !exclude.has(r.id));
 
-  let picked: Figure[] = [];
+  const picked: Figure[] = [];
 
   if (preferDynamic) {
-    // Try to generate fresh figures in parallel — user-field affinity first.
-    // Track slugs already picked this batch so the same candidate isn't
-    // chosen multiple times before any of them finish writing to figures.
+    // Pick all candidates first so we don't double-pick the same slug.
     const usedSlugs = new Set<string>();
-    const candidates: Awaited<ReturnType<typeof pickNextCandidate>>[] = [];
+    const candidates: NonNullable<Awaited<ReturnType<typeof pickNextCandidate>>>[] = [];
     for (let i = 0; i < count; i++) {
       const c = await pickNextCandidate(Array.from(exclude), userFields, Array.from(usedSlugs));
       if (!c) break;
       candidates.push(c);
       usedSlugs.add(c.slug);
     }
-    const generated = (await Promise.all(
-      candidates.filter((c): c is NonNullable<typeof c> => c !== null).map((c) => generateAndCacheFigure(c)),
-    )).filter((f): f is Figure => f !== null);
-    picked.push(...generated);
+    // Kick all generations off in parallel, but emit each one as soon as it
+    // settles — first finished card paints in ~8-12s instead of waiting for
+    // the slowest one.
+    await Promise.all(
+      candidates.map(async (c) => {
+        const f = await generateAndCacheFigure(c);
+        if (f) {
+          picked.push(f);
+          onIncremental?.(f);
+        }
+      }),
+    );
   }
 
-  // Fill remaining slots from cached pool, weighted by field affinity.
+  // Fill remaining slots from cached pool — strict field filter so a sports
+  // user never sees a scientist if they didn't pick science.
   if (picked.length < count) {
     const used = new Set([...exclude, ...picked.map((f) => f.id)]);
     const remaining = cachedPool.filter((r) => !used.has(r.id));
-    const ranked = rankByAffinity(remaining, userFields);
-    picked.push(...ranked.slice(0, count - picked.length).map(rowToFigure));
+    const filtered = shuffle(filterByFields(remaining, userFields));
+    for (const r of filtered.slice(0, count - picked.length)) {
+      const f = rowToFigure(r);
+      picked.push(f);
+      onIncremental?.(f);
+    }
   }
 
-  if (picked.length === 0) return mockFigures.slice(0, count);
+  if (picked.length === 0) {
+    const fallback = mockFigures.slice(0, count);
+    fallback.forEach((f) => onIncremental?.(f));
+    return fallback;
+  }
   return picked;
 }
 

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { personalize } from '../shared';
 import type { Figure, UserProfile } from '../shared';
+import { labelFor, matchedCategory } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
 import { wikiImageSource } from '../services/images';
 
@@ -62,11 +63,24 @@ export function FigureCard({
       <View style={[styles.scrimBand, styles.scrim3]} pointerEvents="none" />
       <View style={[styles.scrimBand, styles.scrim4]} pointerEvents="none" />
 
-      {/* Top-right meta */}
+      {/* Top-right meta — show user's matched category first, then era */}
       <View style={styles.topRow}>
-        <View style={styles.eraPill}>
-          <Text style={styles.eraText}>{figure.era || figure.country || '아카이브'}</Text>
-        </View>
+        {(() => {
+          const match = matchedCategory(figure.categories, profile?.fields);
+          if (!match) return null;
+          return (
+            <View style={[styles.eraPill, match.matched && styles.eraPillMatched]}>
+              <Text style={[styles.eraText, match.matched && styles.eraTextMatched]}>
+                {labelFor(match.category)}
+              </Text>
+            </View>
+          );
+        })()}
+        {figure.era ? (
+          <View style={[styles.eraPill, styles.eraPillMuted]}>
+            <Text style={[styles.eraText, styles.eraTextMuted]}>{figure.era}</Text>
+          </View>
+        ) : null}
       </View>
 
       {/* Bottom content */}
@@ -131,6 +145,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.md,
     right: spacing.md,
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
   },
   eraPill: {
     paddingHorizontal: spacing.sm + 2,
@@ -140,7 +157,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(217, 179, 106, 0.4)',
   },
+  eraPillMatched: {
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
+  },
+  eraPillMuted: {
+    borderColor: colors.border,
+  },
   eraText: { ...type.label, color: colors.gold, fontSize: 10 },
+  eraTextMatched: { color: colors.bg, fontWeight: '700' },
+  eraTextMuted: { color: colors.textSecondary },
 
   bottomBlock: {
     position: 'absolute',

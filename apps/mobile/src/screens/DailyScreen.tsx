@@ -38,17 +38,18 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
       if (preferDynamic) setGenerating(true);
       else setLoading(true);
       setError(null);
+      setFigures([]); // clear so progressive paint is obvious
       try {
         const exclude = [...viewedIds, ...alsoExclude];
-        const list = await loadDailyFigures({ exclude, preferDynamic, userFields });
+        const onIncremental = (f: Figure) => setFigures((prev) => [...prev, f]);
+        const list = await loadDailyFigures({ exclude, preferDynamic, userFields, onIncremental });
         if (list.length === 0 && allowReset && viewedIds.length > 0) {
           await resetViewed();
-          const fresh = await loadDailyFigures({ exclude: alsoExclude, userFields });
-          setFigures(fresh);
-          setExhausted(fresh.length === 0);
+          setFigures([]);
+          await loadDailyFigures({ exclude: alsoExclude, userFields, onIncremental });
+          setExhausted(false);
           return;
         }
-        setFigures(list);
         setExhausted(list.length === 0);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
