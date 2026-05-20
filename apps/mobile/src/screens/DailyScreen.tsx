@@ -66,8 +66,11 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
     navigation.navigate('Figure', { figureId: figure.id });
   };
 
-  const reroll = () => {
+  const reroll = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Treat the currently displayed cards as "seen" — re-roll = "다음 보여줘".
+    // This drains the prebuilt pool faster so dynamic generation kicks in.
+    await Promise.all(figures.map((f) => markViewed(f.id)));
     fetchFigures(figures.map((f) => f.id));
   };
 
