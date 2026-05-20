@@ -183,23 +183,34 @@ async function lookupWiki(name_en: string, name_ko: string | null): Promise<Wiki
 // ─────────────────────────────────────────────────────────────
 
 async function mirrorImage(path: string, sourceUrl: string | undefined): Promise<string | null> {
-  if (!sourceUrl) return null;
+  if (!sourceUrl) {
+    dbg('mirror skip', 'no source url');
+    return null;
+  }
   try {
     const res = await fetch(sourceUrl, { headers: { 'User-Agent': WIKI_UA } });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      dbg('mirror fetch fail', `${path} ${res.status}`);
+      return null;
+    }
     const ct = res.headers.get('content-type') ?? 'image/jpeg';
     const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : 'jpg';
-    const blob = await res.blob();
+    // ArrayBuffer is more reliable than Blob in React Native for storage upload.
+    const arr = await res.arrayBuffer();
 
     const sb = getSupabase();
     const finalPath = path.includes('.') ? path : `${path}.${ext}`;
     const { error } = await sb.storage
       .from('figure-images')
-      .upload(finalPath, blob, { contentType: ct, upsert: true });
-    if (error) return null;
+      .upload(finalPath, arr, { contentType: ct, upsert: true });
+    if (error) {
+      dbg('mirror upload fail', `${path} ${error.message}`);
+      return null;
+    }
     const { data } = sb.storage.from('figure-images').getPublicUrl(finalPath);
     return data.publicUrl;
-  } catch {
+  } catch (e) {
+    dbg('mirror exc', `${path} ${e instanceof Error ? e.message : e}`);
     return null;
   }
 }
@@ -451,7 +462,11 @@ export async function generateAndCacheFigure(c: Candidate): Promise<Figure | nul
   }
   dbg(`schema-ok ${c.slug}`, `timeline=${data.timeline.length}`);
 
-  const imageUrl = await mirrorImage(c.slug, wiki.image_url);
+  // Try client-side mirror to Storage; if it fails (common in RN due to
+  // Wikipedia UA policy / fetch quirks), fall back to the raw Wikipedia URL
+  // so a server-side `npm run mirror-images` run can backfill later.
+  const mirrored = await mirrorImage(c.slug, wiki.image_url);
+  const imageUrl = mirrored ?? wiki.image_url ?? null;
   // Pull additional photos from the Wikipedia page (best-effort).
   data.gallery = await buildGallery(c.slug, c.name_en, c.name_ko, wiki.image_url);
 
