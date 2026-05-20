@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAppFonts } from './src/theme/fonts';
 import { UserProfileProvider } from './src/state/userProfile';
+import { ViewedFiguresProvider } from './src/state/viewedFigures';
 import { RootNavigator } from './src/navigation/RootNavigator';
 
 function AppInner() {
@@ -20,7 +21,9 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <UserProfileProvider>
-        <AppInner />
+        <ViewedFiguresProvider>
+          <AppInner />
+        </ViewedFiguresProvider>
       </UserProfileProvider>
     </SafeAreaProvider>
   );
