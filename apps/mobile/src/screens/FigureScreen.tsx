@@ -15,6 +15,7 @@ import { InsightCards } from '../components/InsightCards';
 import { TodayQuestion } from '../components/TodayQuestion';
 import { Comparison } from '../components/Comparison';
 import { Epilogue } from '../components/Epilogue';
+import { PhotoBand } from '../components/PhotoBand';
 import { SourcesBlock } from '../components/SourcesBlock';
 import { loadFigureById } from '../services/figures';
 import { useUserProfile } from '../state/userProfile';
@@ -98,8 +99,18 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
           </Section>
 
           <Section title="추락과 도약">
-            <Comparison failure={data.failure_event} success={data.success_event} />
+            <Comparison
+              failure={data.failure_event}
+              success={data.success_event}
+              imageUrl={figure.cover_image_url}
+            />
           </Section>
+
+          <PhotoBand
+            imageUrl={figure.cover_image_url}
+            caption={`“${data.quote_ko}”`}
+            height={240}
+          />
 
           <Section title="인생 곡선">
             <LifeCurveChart curve={data.life_curve} profile={profile} />

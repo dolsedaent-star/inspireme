@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { Figure } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
+import { PhotoBand } from './PhotoBand';
 
 /**
  * "말년과 죽음" — closing chapter of the figure's life.
@@ -26,6 +27,12 @@ export function Epilogue({ figure }: { figure: Figure }) {
 
   return (
     <View style={styles.col}>
+      <PhotoBand
+        imageUrl={figure.cover_image_url}
+        caption={lastCurvePoint ? `마지막 — ${lastCurvePoint.label_ko}` : undefined}
+        variant="mono"
+        height={200}
+      />
       <View style={styles.metaRow}>
         {ageAtDeath !== null && (
           <View style={styles.metaPill}>

@@ -47,42 +47,43 @@ function rowToFigure(row: FigureRow): Figure {
   };
 }
 
+function shuffle<T>(arr: T[]): T[] {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 /**
- * Today's three picks. Falls back to local mock data when env is missing
- * (so the app keeps working on a fresh checkout before keys are filled).
+ * Three picks for the Daily screen.
+ *
+ * Test-mode behavior: instead of locking to the date's `daily_picks` row,
+ * we always return a fresh random sample from the prebuilt pool so a refresh
+ * yields different figures. The `daily_picks` table will come back when we
+ * wire up the scheduler closer to launch.
+ *
+ * `exclude` lets the caller skip figures already shown (e.g. swap one card).
  */
-export async function loadDailyFigures(): Promise<Figure[]> {
+export async function loadDailyFigures(opts: { exclude?: string[]; count?: number } = {}): Promise<Figure[]> {
+  const count = opts.count ?? 3;
+  const exclude = new Set(opts.exclude ?? []);
+
   if (!isSupabaseConfigured) {
-    return mockFigures.slice(0, 3);
+    return shuffle(mockFigures.filter((f) => !exclude.has(f.id))).slice(0, count);
   }
 
   const sb = getSupabase();
-  const today = new Date().toISOString().slice(0, 10);
-
-  const { data: pick } = await sb
-    .from('daily_picks')
-    .select('figure_ids')
-    .eq('date', today)
-    .maybeSingle();
-
-  if (pick?.figure_ids?.length) {
-    const { data: rows, error } = await sb
-      .from('figures')
-      .select('*')
-      .in('id', pick.figure_ids as string[]);
-    if (error) throw error;
-    return (rows ?? []).map(rowToFigure);
-  }
-
-  // No pick row yet → pull 3 random prebuilt figures so the screen has content.
   const { data: rows, error } = await sb
     .from('figures')
     .select('*')
-    .eq('source', 'prebuilt')
-    .limit(3);
+    .eq('source', 'prebuilt');
   if (error) throw error;
-  if (!rows?.length) return mockFigures.slice(0, 3); // empty DB → mock so dev can still flow
-  return rows.map(rowToFigure);
+  if (!rows?.length) return mockFigures.slice(0, count);
+
+  const pool = rows.filter((r) => !exclude.has(r.id));
+  return shuffle(pool).slice(0, count).map(rowToFigure);
 }
 
 export async function loadFigureById(id: string): Promise<Figure | null> {
