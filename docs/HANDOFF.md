@@ -2,7 +2,19 @@
 
 > 회사·집 양쪽 머신에서 이어 작업하기 위한 살아있는 상태 문서. 큰 변화가 있을 때마다 갱신.
 
-**마지막 갱신**: 2026-05-19, 03afc41 이후 + Epilogue / fill-epilogue 추가
+**마지막 갱신**: 2026-05-20 — 동적 생성 + Gemini billing live + 로컬 빌드 흐름 + UX 다듬기
+
+집에서 이어가는 핵심 (회사에서 작업한 직후 push한 것):
+- ↻ → Gemini 새 위인 3명 카드 한 장씩 점진 등장 (~10초 첫 카드)
+- 사용자 fields strict filter (스포츠 골랐으면 운동선수만)
+- 분야 최소 3개 강제 (다양성)
+- 카드/Hero에 카테고리 chip (사용자 매치는 골드, 나머지 회색 era)
+- 카드 탭 후 뒤로 와도 같은 3장 유지. ↻만 새로 fetch.
+- 동적 생성된 figure는 wiki URL을 image_url에 일단 저장 → `npm run mirror-images`로 Storage 영구화
+- **로컬 빌드**: `cd apps/mobile; npx expo run:android --variant release` (~16초, EAS 한도 무관)
+  - 필요: JDK 17 (`winget install Microsoft.OpenJDK.17`), `JAVA_HOME`, `ANDROID_HOME`, `ANDROID_SERIAL`
+- 0002 마이그레이션 적용 완료 (figure_candidates + Storage anon write 정책)
+- 97개 candidates 풀, 12개 생성됨
 
 ---
 

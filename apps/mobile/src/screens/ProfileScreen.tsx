@@ -45,10 +45,11 @@ export default function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
   const age = Number(ageText);
   const ageValid = Number.isInteger(age) && age >= 10 && age <= 100;
 
+  const MIN_FIELDS = 3;
   const canAdvance = useMemo(() => {
     if (step === 'age') return ageValid;
     if (step === 'gender') return gender !== null;
-    if (step === 'fields') return fields.length > 0;
+    if (step === 'fields') return fields.length >= MIN_FIELDS;
     return true; // situation is optional
   }, [step, ageValid, gender, fields]);
 
@@ -162,7 +163,9 @@ export default function ProfileScreen({ navigation }: ScreenProps<'Profile'>) {
           {step === 'fields' && (
             <>
               <Text style={styles.question}>어떤 인생에 끌리세요?</Text>
-              <Text style={styles.hint}>관심 분야 (복수 선택)</Text>
+              <Text style={styles.hint}>
+                관심 분야 — 최소 3개 ({fields.length}/{MIN_FIELDS} 선택됨)
+              </Text>
               <View style={styles.chips}>
                 {CATEGORY_OPTIONS.map((opt) => {
                   const active = fields.includes(opt.value);

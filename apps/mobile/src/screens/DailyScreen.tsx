@@ -1,5 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -61,12 +60,14 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
     [viewedIds, resetViewed, userFields],
   );
 
-  // Re-fetch on focus (fresh entry + return from detail).
-  useFocusEffect(
-    useCallback(() => {
-      if (ready) fetchFigures();
-    }, [ready, fetchFigures]),
-  );
+  // Fetch on first mount only — returning from detail keeps the same cards.
+  const fetchedOnceRef = useRef(false);
+  useEffect(() => {
+    if (ready && !fetchedOnceRef.current) {
+      fetchedOnceRef.current = true;
+      fetchFigures();
+    }
+  }, [ready, fetchFigures]);
 
   const open = (figure: Figure) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
