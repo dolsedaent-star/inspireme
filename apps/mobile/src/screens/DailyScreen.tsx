@@ -28,13 +28,17 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
   const [exhausted, setExhausted] = useState(false);
 
   // viewed + currently-on-screen are both excluded.
+  const [generating, setGenerating] = useState(false);
+
   const fetchFigures = useCallback(
-    async (alsoExclude: string[] = [], allowReset = true) => {
-      setLoading(true);
+    async (alsoExclude: string[] = [], opts: { preferDynamic?: boolean; allowReset?: boolean } = {}) => {
+      const { preferDynamic = false, allowReset = true } = opts;
+      if (preferDynamic) setGenerating(true);
+      else setLoading(true);
       setError(null);
       try {
         const exclude = [...viewedIds, ...alsoExclude];
-        const list = await loadDailyFigures({ exclude });
+        const list = await loadDailyFigures({ exclude, preferDynamic });
         if (list.length === 0 && allowReset && viewedIds.length > 0) {
           await resetViewed();
           const fresh = await loadDailyFigures({ exclude: alsoExclude });
@@ -48,6 +52,7 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
         setLoading(false);
+        setGenerating(false);
       }
     },
     [viewedIds, resetViewed],
@@ -68,10 +73,10 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
 
   const reroll = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // Treat the currently displayed cards as "seen" — re-roll = "다음 보여줘".
-    // This drains the prebuilt pool faster so dynamic generation kicks in.
+    // ↻ = "completely fresh figures, not from the pool". Mark current cards
+    // as seen and ask the loader to prefer dynamic generation.
     await Promise.all(figures.map((f) => markViewed(f.id)));
-    fetchFigures(figures.map((f) => f.id));
+    fetchFigures(figures.map((f) => f.id), { preferDynamic: true });
   };
 
   const onResetAll = () => {
@@ -114,9 +119,14 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
           </Pressable>
         </View>
 
-        {loading && (
+        {(loading || generating) && (
           <View style={styles.loadingBox}>
             <ActivityIndicator color={colors.gold} />
+            {generating && (
+              <Text style={styles.loadingText}>
+                새 위인을 모셔오는 중… (15초 정도 걸려요)
+              </Text>
+            )}
           </View>
         )}
 
@@ -188,7 +198,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   rerollGlyph: { color: colors.gold, fontSize: 22, lineHeight: 24 },
-  loadingBox: { paddingVertical: spacing.xxl, alignItems: 'center' },
+  loadingBox: { paddingVertical: spacing.xxl, alignItems: 'center', gap: spacing.md },
+  loadingText: { ...type.bodyKo, color: colors.textSecondary, fontSize: 13, textAlign: 'center' },
   errorBox: {
     padding: spacing.md,
     borderRadius: radii.md,

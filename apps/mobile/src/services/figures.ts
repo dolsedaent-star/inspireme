@@ -60,16 +60,20 @@ function shuffle<T>(arr: T[]): T[] {
 /**
  * Three picks for the Daily screen.
  *
- * Test-mode behavior:
- * - always returns a fresh random sample from the figure pool (no daily_picks row)
- * - `exclude` skips figures already shown / viewed
- * - if the remaining pool can't fill `count`, dynamically generates new figures
- *   from `figure_candidates` (Gemini + Wiki + Storage upload) and caches them
- *   so every future user sees the new entry too.
+ * - First entry (preferDynamic=false): fill from cached figures pool (fast).
+ * - Re-roll (preferDynamic=true): prefer un-generated candidates and create
+ *   them live (Gemini + Wiki + Storage). Falls back to cached pool if
+ *   generation fails or candidates run out.
+ * - `exclude` skips figures already shown / viewed.
  */
-export async function loadDailyFigures(opts: { exclude?: string[]; count?: number } = {}): Promise<Figure[]> {
+export async function loadDailyFigures(opts: {
+  exclude?: string[];
+  count?: number;
+  preferDynamic?: boolean;
+} = {}): Promise<Figure[]> {
   const count = opts.count ?? 3;
   const exclude = new Set(opts.exclude ?? []);
+  const preferDynamic = opts.preferDynamic ?? false;
 
   if (!isSupabaseConfigured) {
     return shuffle(mockFigures.filter((f) => !exclude.has(f.id))).slice(0, count);
@@ -78,22 +82,33 @@ export async function loadDailyFigures(opts: { exclude?: string[]; count?: numbe
   const sb = getSupabase();
   const { data: rows, error } = await sb.from('figures').select('*');
   if (error) throw error;
+  const cachedPool = (rows ?? []).filter((r) => !exclude.has(r.id));
 
-  const pool = (rows ?? []).filter((r) => !exclude.has(r.id));
-  const picked = shuffle(pool).slice(0, count).map(rowToFigure);
+  let picked: Figure[] = [];
 
-  // Pool can't fill the slot — try to dynamically generate the missing ones.
-  if (picked.length < count) {
-    const needed = count - picked.length;
-    const used = new Set([...exclude, ...picked.map((f) => f.id)]);
-    for (let i = 0; i < needed; i++) {
-      const candidate = await pickNextCandidate(Array.from(used));
-      if (!candidate) break;
-      const generated = await generateAndCacheFigure(candidate);
-      if (!generated) break;
-      picked.push(generated);
-      used.add(generated.id);
+  if (preferDynamic) {
+    // Try to generate fresh figures in parallel (3 at a time = ~one Gemini
+    // batch on free tier). Each call is ~10-20s; running them concurrently
+    // keeps the user wait close to a single call's duration.
+    const used = new Set(exclude);
+    const candidates: Awaited<ReturnType<typeof pickNextCandidate>>[] = [];
+    for (let i = 0; i < count; i++) {
+      const c = await pickNextCandidate(Array.from(used));
+      if (!c) break;
+      candidates.push(c);
+      used.add(c.slug); // prevent same candidate twice in this batch
     }
+    const generated = (await Promise.all(
+      candidates.filter((c): c is NonNullable<typeof c> => c !== null).map((c) => generateAndCacheFigure(c)),
+    )).filter((f): f is Figure => f !== null);
+    picked.push(...generated);
+  }
+
+  // Fill remaining slots from cached pool.
+  if (picked.length < count) {
+    const used = new Set([...exclude, ...picked.map((f) => f.id)]);
+    const remaining = cachedPool.filter((r) => !used.has(r.id));
+    picked.push(...shuffle(remaining).slice(0, count - picked.length).map(rowToFigure));
   }
 
   if (picked.length === 0) return mockFigures.slice(0, count);
