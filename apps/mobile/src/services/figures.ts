@@ -1,6 +1,7 @@
 import type { Figure, FigureCategory, FigureData, FigureSources } from '../shared';
 import { mockFigures } from '../data/mockFigures';
 import { getSupabase, isSupabaseConfigured } from './supabase';
+import { generateAndCacheFigure, pickNextCandidate } from './dynamic';
 
 type FigureRow = {
   id: string;
@@ -59,12 +60,12 @@ function shuffle<T>(arr: T[]): T[] {
 /**
  * Three picks for the Daily screen.
  *
- * Test-mode behavior: instead of locking to the date's `daily_picks` row,
- * we always return a fresh random sample from the prebuilt pool so a refresh
- * yields different figures. The `daily_picks` table will come back when we
- * wire up the scheduler closer to launch.
- *
- * `exclude` lets the caller skip figures already shown (e.g. swap one card).
+ * Test-mode behavior:
+ * - always returns a fresh random sample from the figure pool (no daily_picks row)
+ * - `exclude` skips figures already shown / viewed
+ * - if the remaining pool can't fill `count`, dynamically generates new figures
+ *   from `figure_candidates` (Gemini + Wiki + Storage upload) and caches them
+ *   so every future user sees the new entry too.
  */
 export async function loadDailyFigures(opts: { exclude?: string[]; count?: number } = {}): Promise<Figure[]> {
   const count = opts.count ?? 3;
@@ -75,15 +76,28 @@ export async function loadDailyFigures(opts: { exclude?: string[]; count?: numbe
   }
 
   const sb = getSupabase();
-  const { data: rows, error } = await sb
-    .from('figures')
-    .select('*')
-    .eq('source', 'prebuilt');
+  const { data: rows, error } = await sb.from('figures').select('*');
   if (error) throw error;
-  if (!rows?.length) return mockFigures.slice(0, count);
 
-  const pool = rows.filter((r) => !exclude.has(r.id));
-  return shuffle(pool).slice(0, count).map(rowToFigure);
+  const pool = (rows ?? []).filter((r) => !exclude.has(r.id));
+  const picked = shuffle(pool).slice(0, count).map(rowToFigure);
+
+  // Pool can't fill the slot — try to dynamically generate the missing ones.
+  if (picked.length < count) {
+    const needed = count - picked.length;
+    const used = new Set([...exclude, ...picked.map((f) => f.id)]);
+    for (let i = 0; i < needed; i++) {
+      const candidate = await pickNextCandidate(Array.from(used));
+      if (!candidate) break;
+      const generated = await generateAndCacheFigure(candidate);
+      if (!generated) break;
+      picked.push(generated);
+      used.add(generated.id);
+    }
+  }
+
+  if (picked.length === 0) return mockFigures.slice(0, count);
+  return picked;
 }
 
 export async function loadFigureById(id: string): Promise<Figure | null> {
