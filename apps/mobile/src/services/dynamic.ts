@@ -65,6 +65,7 @@ function affinityScore(candidateCategories: string[], userFields: string[]): num
 export async function pickNextCandidate(
   excludeFigureIds: string[] = [],
   userFields: string[] = [],
+  excludeSlugs: string[] = [],
 ): Promise<Candidate | null> {
   if (!isSupabaseConfigured) return null;
   const sb = getSupabase();
@@ -79,10 +80,15 @@ export async function pickNextCandidate(
   const excludedSlugs = new Set(
     (figures ?? []).filter((f) => excludeFigureIds.includes(f.id)).map((f) => f.slug),
   );
+  const inFlight = new Set(excludeSlugs);
 
-  // Prefer fully new (not in figures yet)
-  const fresh = (candidates as Candidate[]).filter((c) => !existing.has(c.slug));
-  const pool = fresh.length > 0 ? fresh : (candidates as Candidate[]).filter((c) => !excludedSlugs.has(c.slug));
+  // Prefer fully new (not in figures yet) AND not already picked this batch
+  const fresh = (candidates as Candidate[]).filter(
+    (c) => !existing.has(c.slug) && !inFlight.has(c.slug),
+  );
+  const pool = fresh.length > 0
+    ? fresh
+    : (candidates as Candidate[]).filter((c) => !excludedSlugs.has(c.slug) && !inFlight.has(c.slug));
   if (pool.length === 0) return null;
 
   // Weight by user-field affinity: pick top affinity bucket and shuffle within.

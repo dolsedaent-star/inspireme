@@ -115,13 +115,15 @@ export async function loadDailyFigures(opts: {
 
   if (preferDynamic) {
     // Try to generate fresh figures in parallel — user-field affinity first.
-    const used = new Set(exclude);
+    // Track slugs already picked this batch so the same candidate isn't
+    // chosen multiple times before any of them finish writing to figures.
+    const usedSlugs = new Set<string>();
     const candidates: Awaited<ReturnType<typeof pickNextCandidate>>[] = [];
     for (let i = 0; i < count; i++) {
-      const c = await pickNextCandidate(Array.from(used), userFields);
+      const c = await pickNextCandidate(Array.from(exclude), userFields, Array.from(usedSlugs));
       if (!c) break;
       candidates.push(c);
-      used.add(c.slug);
+      usedSlugs.add(c.slug);
     }
     const generated = (await Promise.all(
       candidates.filter((c): c is NonNullable<typeof c> => c !== null).map((c) => generateAndCacheFigure(c)),
