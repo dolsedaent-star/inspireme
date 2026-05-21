@@ -10,6 +10,9 @@
     "fill-epilogue": "tsx fill-epilogue.ts",
     "sync-candidates": "tsx sync-candidates.ts",
     "prefetch-previews": "tsx prefetch-previews.ts",
+    "seed-collections": "tsx seed-collections.ts",
+    "translate-captions": "tsx translate-gallery-captions.ts",
+    "build-galleries": "tsx build-galleries.ts",
     "upload-bgm": "tsx upload-bgm.ts",
     "typecheck": "tsc --noEmit"
   },

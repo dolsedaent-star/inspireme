@@ -6,6 +6,8 @@ import { useUserProfile } from '../state/userProfile';
 import ProfileScreen from '../screens/ProfileScreen';
 import DailyScreen from '../screens/DailyScreen';
 import FigureScreen from '../screens/FigureScreen';
+import CollectionsScreen from '../screens/CollectionsScreen';
+import CollectionDetailScreen from '../screens/CollectionDetailScreen';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -49,6 +51,16 @@ export function RootNavigator() {
         <Stack.Screen
           name="Figure"
           component={FigureScreen}
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="Collections"
+          component={CollectionsScreen}
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="CollectionDetail"
+          component={CollectionDetailScreen}
           options={{ animation: 'slide_from_right' }}
         />
       </Stack.Navigator>

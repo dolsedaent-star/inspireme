@@ -153,17 +153,27 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
   useEffect(() => {
     if (!figure || (figure.data.gallery?.length ?? 0) > 0) return;
     setWikiGallery([]);
-    (async () => {
+
+    const fetchMediaList = async (title: string, lang: 'ko' | 'en') => {
       try {
         const res = await fetch(
-          `https://en.wikipedia.org/api/rest_v1/page/media-list/${encodeURIComponent(figure.name_en)}`,
+          `https://${lang}.wikipedia.org/api/rest_v1/page/media-list/${encodeURIComponent(title)}`,
           { headers: { 'User-Agent': 'InspireMe/0.1 (dolsedaent@gmail.com)' } },
         );
-        if (!res.ok) return;
-        const json = await res.json() as { items?: unknown[] };
-        const items: unknown[] = Array.isArray(json.items) ? json.items : [];
-        const coverBase = figure.cover_image_url?.split('/').pop()?.toLowerCase() ?? '';
-        const picks = items
+        if (!res.ok) return [];
+        const json = (await res.json()) as { items?: unknown[] };
+        return Array.isArray(json.items) ? json.items : [];
+      } catch {
+        return [];
+      }
+    };
+
+    (async () => {
+      // Prefer Korean Wikipedia — captions there are Korean. Fall back to
+      // English if the Korean page has no usable media.
+      const coverBase = figure.cover_image_url?.split('/').pop()?.toLowerCase() ?? '';
+      const buildPicks = (items: unknown[]): GalleryItem[] =>
+        items
           .filter((i: any) => {
             if (i.type !== 'image' || !i.srcset?.length) return false;
             const t = String(i.title ?? '').toLowerCase();
@@ -180,8 +190,19 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
             return { url, caption_ko: raw ? String(raw).trim().slice(0, 90) : undefined } as GalleryItem;
           })
           .filter((x): x is GalleryItem => x !== null);
-        setWikiGallery(picks);
-      } catch {}
+
+      // Korean wiki first
+      const koItems = await fetchMediaList(figure.name_ko, 'ko');
+      let picks = buildPicks(koItems).filter((p) => p.caption_ko && /[가-힣]/.test(p.caption_ko));
+
+      // If we got nothing usable in Korean, try English (captions will likely
+      // be filtered out client-side, so this mostly stays empty — which is
+      // the correct "we don't trust these photos" outcome).
+      if (picks.length === 0) {
+        const enItems = await fetchMediaList(figure.name_en, 'en');
+        picks = buildPicks(enItems);
+      }
+      setWikiGallery(picks);
     })();
   }, [figure]);
 

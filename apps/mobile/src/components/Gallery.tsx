@@ -29,6 +29,10 @@ export function Gallery({ items }: { items: GalleryItem[] }) {
       {items.map((item, i) => {
         if (broken.has(i) || !item.url) return null;
         const koCaption = isKorean(item.caption_ko) ? item.caption_ko : null;
+        // Without a Korean caption we can't trust the photo is the right
+        // person (Wikipedia page media often includes spouses, colleagues,
+        // logos). Hide the card entirely.
+        if (!koCaption) return null;
         return (
           <View key={i} style={styles.card}>
             <Image

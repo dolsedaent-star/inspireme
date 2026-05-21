@@ -84,9 +84,12 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
   };
 
   // Dev-only re-roll: shuffle previews (no ad, no Gemini cost).
-  const reroll = () => {
+  // Mark the current cards as "seen" so they don't immediately come back.
+  const reroll = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    fetchPreviews(previews.map((p) => p.slug));
+    const currentSlugs = previews.map((p) => p.slug);
+    await Promise.all(currentSlugs.map((s) => markViewed(s)));
+    fetchPreviews(currentSlugs);
   };
 
   const onResetAll = () => {
@@ -123,9 +126,18 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
               </Pressable>
             )}
           </View>
-          <Pressable onPress={reroll} hitSlop={12} style={styles.rerollBtn} disabled={loading}>
-            <Text style={styles.rerollGlyph}>↻</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={() => navigation.navigate('Collections')}
+              hitSlop={12}
+              style={styles.themeBtn}
+            >
+              <Text style={styles.themeGlyph}>☰</Text>
+            </Pressable>
+            <Pressable onPress={reroll} hitSlop={12} style={styles.rerollBtn} disabled={loading}>
+              <Text style={styles.rerollGlyph}>↻</Text>
+            </Pressable>
+          </View>
         </View>
 
         {error && (
@@ -189,6 +201,7 @@ const styles = StyleSheet.create({
   viewedRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm },
   viewedText: { ...type.caption, color: colors.textTertiary, fontSize: 12 },
   viewedReset: { ...type.caption, color: colors.gold, fontSize: 12, marginLeft: 4 },
+  headerActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
   rerollBtn: {
     width: 44,
     height: 44,
@@ -198,9 +211,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(217, 179, 106, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing.lg,
   },
   rerollGlyph: { color: colors.gold, fontSize: 22, lineHeight: 24 },
+  themeBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  themeGlyph: { color: colors.gold, fontSize: 20, lineHeight: 22 },
   errorBox: {
     padding: spacing.md,
     borderRadius: radii.md,

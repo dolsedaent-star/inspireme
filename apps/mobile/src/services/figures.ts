@@ -303,7 +303,14 @@ export async function loadDailyPreviews(opts: {
     .from('figure_candidates')
     .select('slug, name_en, name_ko, categories, country, deceased, image_url, preview_ko')
     .eq('deceased', true);
-  if (cErr) throw cErr;
+  if (cErr) {
+    // Surface a useful message instead of [object Object]
+    const hint =
+      cErr.message?.includes('column') || cErr.code === '42703'
+        ? ' — 0004 마이그레이션 미적용일 수 있어요 (figure_candidates에 image_url/preview_ko 컬럼 없음)'
+        : '';
+    throw new Error(`Supabase: ${cErr.message ?? cErr.code ?? 'unknown'}${hint}`);
+  }
 
   let pool = (candidates ?? []) as CandidateRow[];
 
