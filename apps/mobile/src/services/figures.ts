@@ -76,6 +76,24 @@ function fieldOverlap(rowFields: string[] | null | undefined, userFields: string
   return rowFields.filter((f) => set.has(f)).length;
 }
 
+/**
+ * Politics / military figures are often heroes in one country and villains
+ * in another (e.g. 안중근). Skip them unless the user explicitly chose those
+ * fields. Figures with other categories (e.g. politics+literature like 처칠)
+ * still surface — only "purely political/military" entries get filtered out.
+ */
+const SENSITIVE_CATS = new Set(['politics', 'military']);
+
+function isSensitiveFigure(
+  figureFields: string[] | null | undefined,
+  userFields: string[],
+): boolean {
+  if (!figureFields?.length) return false;
+  const userOptedIn = userFields.some((f) => SENSITIVE_CATS.has(f));
+  if (userOptedIn) return false; // user picked politics or military → fine
+  return figureFields.every((f) => SENSITIVE_CATS.has(f));
+}
+
 /** Filter rows down to ones that match at least one user field. */
 function filterByFields<T extends { fields: string[] | null }>(rows: T[], userFields: string[]): T[] {
   if (!userFields.length) return rows;
@@ -123,7 +141,9 @@ export async function loadDailyFigures(opts: {
     .select('*')
     .or('death_year.not.is.null,birth_year.lt.1940');
   if (error) throw error;
-  const cachedPool = (rows ?? []).filter((r) => !exclude.has(r.id));
+  const cachedPool = (rows ?? [])
+    .filter((r) => !exclude.has(r.id))
+    .filter((r) => !isSensitiveFigure(r.fields, userFields));
 
   const picked: Figure[] = [];
 

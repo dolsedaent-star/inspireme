@@ -10,6 +10,11 @@ export function stageForAge(age: number): LifeStage {
   return 'later';
 }
 
+/** Death/late-life events shouldn't anchor the "지금의 당신에게" copy. */
+function eligibleTimeline(timeline: TimelineEvent[]): TimelineEvent[] {
+  return timeline.filter((e) => e.category !== 'later_years' && e.stage !== 'later');
+}
+
 function nearestEvent(events: TimelineEvent[], age: number): TimelineEvent | null {
   if (events.length === 0) return null;
   return events.reduce((best, ev) =>
@@ -44,18 +49,44 @@ function curvePosition(figure: Figure, age: number) {
   return null;
 }
 
+function isPositive(c: TimelineEvent['category']): boolean {
+  return c === 'success' || c === 'turning_point';
+}
+
 function comparisonCopy(matching: TimelineEvent | null, figure: Figure, age: number): string {
-  if (!matching) return `${figure.name_ko}는 당신과 같은 ${age}세 무렵에도 자신의 길을 찾아가는 중이었습니다.`;
-  const ageDiff = age - matching.age;
-  if (Math.abs(ageDiff) <= 1) return `${figure.name_ko}는 ${matching.age}세, 지금의 당신과 같은 나이에 "${matching.title_ko}"의 순간을 맞이했습니다.`;
-  if (ageDiff > 0) return `${figure.name_ko}는 ${matching.age}세에 "${matching.title_ko}"을(를) 경험했습니다. 당신은 그보다 ${ageDiff}년 더 길게 준비할 시간을 가졌습니다.`;
-  return `${figure.name_ko}는 ${matching.age}세에 "${matching.title_ko}"을(를) 경험했습니다. 당신에게는 아직 ${-ageDiff}년의 여유가 있습니다.`;
+  const name = figure.name_ko;
+  if (!matching) {
+    return `${name}도 ${age}세 무렵, 자신의 길을 찾아가는 중이었습니다.`;
+  }
+  const title = `'${matching.title_ko}'`;
+  const positive = isPositive(matching.category);
+  const ageDiff = age - matching.age; // > 0 = 사용자가 더 나이 많음
+
+  // 같은 나이대 (±1)
+  if (Math.abs(ageDiff) <= 1) {
+    return positive
+      ? `${name}도 ${matching.age}세, 지금의 당신과 같은 나이에 ${title}의 시기를 보내고 있었습니다.`
+      : `${name}도 ${matching.age}세 무렵, ${title}의 시기를 지나고 있었습니다.`;
+  }
+
+  // 사용자가 더 나이가 많은 경우 — "조급해 말라" 격려 톤
+  if (ageDiff > 0) {
+    return positive
+      ? `${name}는 ${matching.age}세에 ${title}을(를) 만들어냈습니다. 시작은 어디서든 가능합니다.`
+      : `${name}도 ${matching.age}세 무렵, ${title}의 시기를 지났습니다. 그 후로도 인생은 길게 이어졌습니다.`;
+  }
+
+  // 위인이 더 나이가 많은 경우 — "당신에게 시간이 남아 있다" 격려 톤
+  return positive
+    ? `${name}는 지금의 당신보다 ${-ageDiff}살 뒤인 ${matching.age}세에 ${title}을(를) 이뤘습니다. 그 시간은 아직 당신에게 남아 있습니다.`
+    : `${name}는 ${matching.age}세에 ${title}의 시기를 맞이했습니다. 모든 인생에 굴곡이 있습니다.`;
 }
 
 export function personalize(figure: Figure, user: UserProfile): PersonalizedInsight {
+  const timeline = eligibleTimeline(figure.data.timeline);
   const userStage = stageForAge(user.age);
-  const matching = eventInStage(figure.data.timeline, userStage) ?? nearestEvent(figure.data.timeline, user.age);
-  const turning = nextTurningPoint(figure.data.timeline, user.age);
+  const matching = eventInStage(timeline, userStage) ?? nearestEvent(timeline, user.age);
+  const turning = nextTurningPoint(timeline, user.age);
   return {
     matching_event: matching,
     comparison_ko: comparisonCopy(matching, figure, user.age),

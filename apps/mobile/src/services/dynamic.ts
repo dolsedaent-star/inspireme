@@ -124,6 +124,15 @@ export async function pickNextCandidate(
     : (candidates as Candidate[]).filter((c) => !excludedSlugs.has(c.slug) && !inFlight.has(c.slug));
   if (pool.length === 0) return null;
 
+  // Skip purely politics/military candidates unless the user opted in —
+  // these figures are heroes in one country and villains in another.
+  const SENSITIVE = new Set(['politics', 'military']);
+  const userOptedIn = userFields.some((f) => SENSITIVE.has(f));
+  if (!userOptedIn) {
+    pool = pool.filter((c) => !c.categories.every((f) => SENSITIVE.has(f)));
+    if (pool.length === 0) return null;
+  }
+
   // Prefer candidates that match the user's chosen fields.
   // If none match, use the full remaining pool.
   if (userFields.length > 0) {

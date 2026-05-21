@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import type { Figure } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
 import { FigureCard } from '../components/FigureCard';
+import { FaceFillPlaceholder } from '../components/FaceFillPlaceholder';
+import { MockAdModal } from '../components/MockAdModal';
 import { loadDailyFigures } from '../services/figures';
 import { useUserProfile } from '../state/userProfile';
 import { useViewedFigures } from '../state/viewedFigures';
@@ -25,9 +27,8 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exhausted, setExhausted] = useState(false);
-
-  // viewed + currently-on-screen are both excluded.
   const [generating, setGenerating] = useState(false);
+  const [adVisible, setAdVisible] = useState(false);
 
   const userFields = profile?.fields ?? [];
 
@@ -37,18 +38,19 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
       if (preferDynamic) setGenerating(true);
       else setLoading(true);
       setError(null);
-      setFigures([]); // clear so progressive paint is obvious
+      setFigures([]);
       try {
         const exclude = [...viewedIds, ...alsoExclude];
-        const onIncremental = (f: Figure) => setFigures((prev) => [...prev, f]);
-        const list = await loadDailyFigures({ exclude, preferDynamic, userFields, onIncremental });
+        // Atomic paint: wait for all 3 cards then setFigures once.
+        const list = await loadDailyFigures({ exclude, preferDynamic, userFields });
         if (list.length === 0 && allowReset && viewedIds.length > 0) {
           await resetViewed();
-          setFigures([]);
-          await loadDailyFigures({ exclude: alsoExclude, userFields, onIncremental });
-          setExhausted(false);
+          const fresh = await loadDailyFigures({ exclude: alsoExclude, userFields });
+          setFigures(fresh);
+          setExhausted(fresh.length === 0);
           return;
         }
+        setFigures(list);
         setExhausted(list.length === 0);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -75,10 +77,14 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
     navigation.navigate('Figure', { figureId: figure.id });
   };
 
-  const reroll = async () => {
+  // ↻ — gate dynamic generation behind a (mock) interstitial ad. The Gemini
+  // call only happens after the user finishes watching.
+  const reroll = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // ↻ = "completely fresh figures, not from the pool". Mark current cards
-    // as seen and ask the loader to prefer dynamic generation.
+    setAdVisible(true);
+  };
+  const handleAdDone = async () => {
+    setAdVisible(false);
     await Promise.all(figures.map((f) => markViewed(f.id)));
     fetchFigures(figures.map((f) => f.id), { preferDynamic: true });
   };
@@ -101,8 +107,11 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
     );
   };
 
+  const isLoadingState = (loading || generating) && figures.length === 0;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <MockAdModal visible={adVisible} onDone={handleAdDone} />
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
@@ -118,18 +127,30 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
               </Pressable>
             )}
           </View>
-          <Pressable onPress={reroll} hitSlop={12} style={styles.rerollBtn}>
+          <Pressable
+            onPress={reroll}
+            hitSlop={12}
+            style={styles.rerollBtn}
+            disabled={generating || adVisible}
+          >
             <Text style={styles.rerollGlyph}>↻</Text>
           </Pressable>
         </View>
 
-        {error && !loading && (
+        {error && !isLoadingState && (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>불러오기 실패: {error}</Text>
           </View>
         )}
 
-        {!exhausted &&
+        {isLoadingState ? (
+          <>
+            <FaceFillPlaceholder />
+            <FaceFillPlaceholder />
+            <FaceFillPlaceholder />
+          </>
+        ) : (
+          !exhausted &&
           figures.slice(0, 3).map((figure, i) => (
             <FigureCard
               key={figure.id}
@@ -140,19 +161,7 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
               onPress={() => open(figure)}
               onUnlock={() => {}}
             />
-          ))}
-
-        {(loading || generating) && figures.length < 3 && (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator color={colors.gold} />
-            {(generating || figures.length === 0) && (
-              <Text style={styles.loadingText}>
-                {figures.length === 0
-                  ? '위인을 불러오는 중…'
-                  : `${figures.length}명 완료 — 나머지 생성 중… (잠시만요)`}
-              </Text>
-            )}
-          </View>
+          ))
         )}
 
         {!loading && !generating && exhausted && (
@@ -169,7 +178,7 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
 
         <View style={styles.footerNote}>
           <Text style={styles.footerText}>
-            테스트 모드 — 카드 탭 또는 ↻로 새 위인을 받습니다. 이미 본 위인은 다시 안 나옵니다.
+            ↻로 새 위인을 받을 때마다 짧은 광고가 표시됩니다.
           </Text>
         </View>
       </ScrollView>
@@ -203,8 +212,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   rerollGlyph: { color: colors.gold, fontSize: 22, lineHeight: 24 },
-  loadingBox: { paddingVertical: spacing.xxl, alignItems: 'center', gap: spacing.md },
-  loadingText: { ...type.bodyKo, color: colors.textSecondary, fontSize: 13, textAlign: 'center' },
   errorBox: {
     padding: spacing.md,
     borderRadius: radii.md,
