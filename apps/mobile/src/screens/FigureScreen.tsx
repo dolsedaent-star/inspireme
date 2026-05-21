@@ -27,7 +27,8 @@ import { Comparison } from '../components/Comparison';
 import { Epilogue } from '../components/Epilogue';
 import { Gallery } from '../components/Gallery';
 import { SourcesBlock } from '../components/SourcesBlock';
-import { loadFigureById } from '../services/figures';
+import { loadFigureById, loadFigureBySlug } from '../services/figures';
+import { generateAndCacheFigure } from '../services/dynamic';
 import { useUserProfile } from '../state/userProfile';
 import type { ScreenProps } from '../navigation/types';
 
@@ -100,12 +101,38 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
     }, 300);
   }
 
+  // Route can carry either:
+  //   { figureId } — already-generated row, fetch by UUID
+  //   { preview }  — only a candidate preview; fetch by slug if it exists,
+  //                  otherwise run generateAndCacheFigure (Gemini)
+  const figureId = route.params.figureId;
+  const preview = route.params.preview;
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const f = await loadFigureById(route.params.figureId);
-        if (!cancelled) setFigure(f);
+        if (figureId) {
+          const f = await loadFigureById(figureId);
+          if (!cancelled) setFigure(f);
+          return;
+        }
+        if (preview) {
+          // Try cache by slug first (the preview's figureId may be stale).
+          const cached = await loadFigureBySlug(preview.slug);
+          if (cached) {
+            if (!cancelled) setFigure(cached);
+            return;
+          }
+          // Not in figures yet — generate on the fly (~10s).
+          const generated = await generateAndCacheFigure({
+            slug: preview.slug,
+            name_en: preview.name_en,
+            name_ko: preview.name_ko,
+            categories: preview.categories,
+          });
+          if (!cancelled) setFigure(generated);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -114,7 +141,7 @@ export default function FigureScreen({ route, navigation }: ScreenProps<'Figure'
       cancelled = true;
       if (moodTimer.current) clearTimeout(moodTimer.current);
     };
-  }, [route.params.figureId]);
+  }, [figureId, preview]);
 
   const insight = useMemo(
     () => (figure && profile ? personalize(figure, profile) : null),

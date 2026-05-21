@@ -26,5 +26,4 @@ create policy "figure_images_anon_update_dev" on storage.objects
 `);
 
 // Verify by listing existing policies via the storage admin API.
-const { data, error } = await sb.rpc('pg_policies_for_bucket', { bucket: 'figure-images' } as any).catch(() => ({ data: null, error: null } as any));
-if (data || error) console.log('rpc check:', { data, error });
+// (옛 진단 코드 — 무시. 정책은 Supabase 콘솔에서 SQL Editor로 적용됨.)

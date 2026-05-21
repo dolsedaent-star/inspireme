@@ -42,8 +42,8 @@ export type Candidate = {
   name_en: string;
   name_ko: string | null;
   categories: string[];
-  country: string | null;
-  deceased: boolean;
+  country?: string | null;
+  deceased?: boolean;
 };
 
 const VALID_STAGES = new Set([
@@ -77,7 +77,7 @@ function affinityScore(candidateCategories: string[], userFields: string[]): num
   return candidateCategories.filter((c) => u.has(c)).length;
 }
 
-function countryBonus(country: string | null): number {
+function countryBonus(country: string | null | undefined): number {
   if (!country) return 0;
   return PREFERRED_COUNTRIES.includes(country) ? 1 : 0;
 }

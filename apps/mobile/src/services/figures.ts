@@ -120,14 +120,18 @@ export async function loadDailyFigures(opts: {
   count?: number;
   preferDynamic?: boolean;
   userFields?: string[];
-  /** Called as each figure becomes available, so the UI can paint progressively. */
+  /** Each figure as it becomes available (kept for callers that want it). */
   onIncremental?: (figure: Figure) => void;
+  /** Fires after each candidate finishes (success or fail), so the UI can
+   *  drive a real progress indicator instead of a looping animation. */
+  onProgress?: (completed: number, total: number) => void;
 } = {}): Promise<Figure[]> {
   const count = opts.count ?? 3;
   const exclude = new Set(opts.exclude ?? []);
   const preferDynamic = opts.preferDynamic ?? false;
   const userFields = opts.userFields ?? [];
   const onIncremental = opts.onIncremental;
+  const onProgress = opts.onProgress;
 
   if (!isSupabaseConfigured) {
     const list = shuffle(mockFigures.filter((f) => !exclude.has(f.id))).slice(0, count);
@@ -157,9 +161,8 @@ export async function loadDailyFigures(opts: {
       candidates.push(c);
       usedSlugs.add(c.slug);
     }
-    // Kick all generations off in parallel, but emit each one as soon as it
-    // settles — first finished card paints in ~8-12s instead of waiting for
-    // the slowest one.
+    let completed = 0;
+    onProgress?.(0, count);
     await Promise.all(
       candidates.map(async (c) => {
         const f = await generateAndCacheFigure(c);
@@ -167,24 +170,44 @@ export async function loadDailyFigures(opts: {
           picked.push(f);
           onIncremental?.(f);
         }
+        completed += 1;
+        onProgress?.(completed, count);
       }),
     );
   }
 
   // Fill remaining slots from cached pool.
-  // Prefer field-matched figures; if none match, fall back to the full pool.
-  // weightedShuffle gives Korean figures 2× probability over non-Korean.
+  // Soft rank by field affinity instead of hard filter — if a re-roll
+  // partially failed (Gemini timeout, sensitive candidate skipped, etc.)
+  // we still want to surface 3 cards rather than leaving the user with 1.
   if (picked.length < count) {
     const used = new Set([...exclude, ...picked.map((f) => f.id)]);
     const remaining = cachedPool.filter((r) => !used.has(r.id));
-    const fieldFiltered = filterByFields(remaining, userFields);
-    const pool = weightedShuffle(fieldFiltered.length > 0 ? fieldFiltered : remaining, userFields);
+    const pool = weightedShuffle(remaining, userFields);
     for (const r of pool.slice(0, count - picked.length)) {
       const f = rowToFigure(r);
       picked.push(f);
       onIncremental?.(f);
     }
   }
+
+  // Absolute last resort — if we still don't have 3 cards because the
+  // user has burned through the un-viewed pool, allow re-showing already-
+  // viewed figures so the screen is never half-empty. (Three cards beats
+  // perfect "no repeats" UX.)
+  if (picked.length < count) {
+    const pickedIds = new Set(picked.map((f) => f.id));
+    const allRows = (rows ?? []).filter((r) => !pickedIds.has(r.id));
+    const pool = weightedShuffle(allRows, userFields);
+    for (const r of pool.slice(0, count - picked.length)) {
+      const f = rowToFigure(r);
+      picked.push(f);
+      onIncremental?.(f);
+    }
+  }
+
+  // Cached fills count toward progress completion as well so we hit 100%.
+  onProgress?.(count, count);
 
   // Only use mock stubs when Supabase is not configured — mock IDs are slugs,
   // not UUIDs, so they can never be resolved by loadFigureById and would show
@@ -205,4 +228,152 @@ export async function loadFigureById(id: string): Promise<Figure | null> {
   const { data, error } = await sb.from('figures').select('*').eq('id', id).maybeSingle();
   if (error) throw error;
   return data ? rowToFigure(data) : null;
+}
+
+export async function loadFigureBySlug(slug: string): Promise<Figure | null> {
+  if (!isSupabaseConfigured) {
+    return mockFigures.find((f) => f.id === slug) ?? null;
+  }
+  const sb = getSupabase();
+  const { data, error } = await sb.from('figures').select('*').eq('slug', slug).maybeSingle();
+  if (error) throw error;
+  return data ? rowToFigure(data) : null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Preview cards — what the Daily screen shows. Cheap to render: a
+// figure_candidates row plus, if the figure has been generated before, a
+// pointer to the cached figures.id. No Gemini cost.
+// ─────────────────────────────────────────────────────────────
+
+export interface PreviewCard {
+  slug: string;
+  name_ko: string;
+  name_en: string;
+  categories: FigureCategory[];
+  era: string | null;
+  image_url: string | null;
+  preview_ko: string | null;
+  /** UUID in `figures` if the full content has already been generated. */
+  figureId: string | null;
+}
+
+type CandidateRow = {
+  slug: string;
+  name_en: string;
+  name_ko: string | null;
+  categories: string[] | null;
+  country: string | null;
+  deceased: boolean | null;
+  image_url: string | null;
+  preview_ko: string | null;
+};
+
+function candidateToPreview(c: CandidateRow, figureId: string | null, era: string | null): PreviewCard {
+  return {
+    slug: c.slug,
+    name_ko: c.name_ko ?? c.name_en,
+    name_en: c.name_en,
+    categories: (c.categories ?? []) as FigureCategory[],
+    era,
+    image_url: c.image_url,
+    preview_ko: c.preview_ko,
+    figureId,
+  };
+}
+
+export async function loadDailyPreviews(opts: {
+  exclude?: string[]; // viewed slugs
+  count?: number;
+  userFields?: string[];
+} = {}): Promise<PreviewCard[]> {
+  const count = opts.count ?? 3;
+  const exclude = new Set(opts.exclude ?? []);
+  const userFields = opts.userFields ?? [];
+
+  if (!isSupabaseConfigured) {
+    return [];
+  }
+
+  const sb = getSupabase();
+
+  // Pull every deceased candidate that has at least a preview image — we'd
+  // rather skip showing a placeholder than show a faceless card.
+  const { data: candidates, error: cErr } = await sb
+    .from('figure_candidates')
+    .select('slug, name_en, name_ko, categories, country, deceased, image_url, preview_ko')
+    .eq('deceased', true);
+  if (cErr) throw cErr;
+
+  let pool = (candidates ?? []) as CandidateRow[];
+
+  // Strict field filter — sports user sees sports figures only.
+  if (userFields.length > 0) {
+    const userSet = new Set(userFields);
+    pool = pool.filter(
+      (c) => (c.categories ?? []).some((f) => userSet.has(f)),
+    );
+  }
+
+  // Drop sensitive (politics/military only) unless user opted in.
+  const userOptedSensitive = userFields.some((f) => SENSITIVE_CATS.has(f));
+  if (!userOptedSensitive) {
+    pool = pool.filter((c) => {
+      const cats = c.categories ?? [];
+      if (cats.length === 0) return true;
+      return !cats.every((f) => SENSITIVE_CATS.has(f));
+    });
+  }
+
+  // Drop viewed.
+  pool = pool.filter((c) => !exclude.has(c.slug));
+
+  // Drop ones with no image — we'd rather show 2 cards than a faceless one.
+  pool = pool.filter((c) => c.image_url);
+
+  // Map slug → figures.id (so a tap on an already-generated figure skips Gemini)
+  const slugs = pool.map((c) => c.slug);
+  const eraBySlug = new Map<string, string | null>();
+  const idBySlug = new Map<string, string>();
+  if (slugs.length > 0) {
+    const { data: figs } = await sb
+      .from('figures')
+      .select('slug, id, era')
+      .in('slug', slugs);
+    for (const f of figs ?? []) {
+      idBySlug.set(f.slug, f.id);
+      eraBySlug.set(f.slug, f.era);
+    }
+  }
+
+  // Weighted shuffle: prefer Korean candidates + ones that match user fields
+  // more deeply. Keep results varied between re-rolls.
+  const ranked = pool
+    .map((c) => {
+      const countryW = c.country === 'korea' ? 2 : 1;
+      const fieldW = 1 + (c.categories ?? []).filter((f) => userFields.includes(f)).length;
+      return { c, key: Math.random() * countryW * fieldW };
+    })
+    .sort((a, b) => b.key - a.key);
+
+  const picked: PreviewCard[] = [];
+  for (const { c } of ranked) {
+    if (picked.length >= count) break;
+    picked.push(candidateToPreview(c, idBySlug.get(c.slug) ?? null, eraBySlug.get(c.slug) ?? null));
+  }
+
+  // Absolute fallback: if strict field filter wiped the pool, drop the field
+  // requirement so we still show something (3 cards > 0 cards).
+  if (picked.length < count) {
+    const have = new Set(picked.map((p) => p.slug));
+    const rest = (candidates ?? [])
+      .filter((c) => c.deceased)
+      .filter((c) => !exclude.has(c.slug) && !have.has(c.slug) && c.image_url) as CandidateRow[];
+    for (const c of shuffle(rest)) {
+      if (picked.length >= count) break;
+      picked.push(candidateToPreview(c, idBySlug.get(c.slug) ?? null, eraBySlug.get(c.slug) ?? null));
+    }
+  }
+
+  return picked;
 }

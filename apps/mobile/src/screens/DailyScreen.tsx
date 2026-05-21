@@ -2,12 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import type { Figure } from '../shared';
 import { colors, radii, spacing, type } from '../theme';
-import { FigureCard } from '../components/FigureCard';
+import { PreviewCardView } from '../components/PreviewCardView';
 import { FaceFillPlaceholder } from '../components/FaceFillPlaceholder';
 import { MockAdModal } from '../components/MockAdModal';
-import { loadDailyFigures } from '../services/figures';
+import { loadDailyPreviews, type PreviewCard } from '../services/figures';
 import { useUserProfile } from '../state/userProfile';
 import { useViewedFigures } from '../state/viewedFigures';
 import type { ScreenProps } from '../navigation/types';
@@ -21,72 +20,73 @@ const KO_DATE = new Intl.DateTimeFormat('ko-KR', {
 
 export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
   const { profile } = useUserProfile();
+  // viewedIds now holds slugs in the new flow. The hook stores arbitrary strings.
   const { ready, viewedIds, markViewed, resetViewed } = useViewedFigures();
   const today = useMemo(() => KO_DATE.format(new Date()), []);
-  const [figures, setFigures] = useState<Figure[]>([]);
+  const [previews, setPreviews] = useState<PreviewCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [exhausted, setExhausted] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [adVisible, setAdVisible] = useState(false);
+  const [pendingPreview, setPendingPreview] = useState<PreviewCard | null>(null);
 
   const userFields = profile?.fields ?? [];
 
-  const fetchFigures = useCallback(
-    async (alsoExclude: string[] = [], opts: { preferDynamic?: boolean; allowReset?: boolean } = {}) => {
-      const { preferDynamic = false, allowReset = true } = opts;
-      if (preferDynamic) setGenerating(true);
-      else setLoading(true);
+  const fetchPreviews = useCallback(
+    async (alsoExclude: string[] = []) => {
+      setLoading(true);
       setError(null);
-      setFigures([]);
+      setPreviews([]);
       try {
         const exclude = [...viewedIds, ...alsoExclude];
-        // Atomic paint: wait for all 3 cards then setFigures once.
-        const list = await loadDailyFigures({ exclude, preferDynamic, userFields });
-        if (list.length === 0 && allowReset && viewedIds.length > 0) {
+        let list = await loadDailyPreviews({ exclude, userFields });
+        if (list.length === 0 && viewedIds.length > 0) {
           await resetViewed();
-          const fresh = await loadDailyFigures({ exclude: alsoExclude, userFields });
-          setFigures(fresh);
-          setExhausted(fresh.length === 0);
-          return;
+          list = await loadDailyPreviews({ exclude: alsoExclude, userFields });
         }
-        setFigures(list);
+        setPreviews(list);
         setExhausted(list.length === 0);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
       } finally {
         setLoading(false);
-        setGenerating(false);
       }
     },
     [viewedIds, resetViewed, userFields],
   );
 
-  // Fetch on first mount only — returning from detail keeps the same cards.
   const fetchedOnceRef = useRef(false);
   useEffect(() => {
     if (ready && !fetchedOnceRef.current) {
       fetchedOnceRef.current = true;
-      fetchFigures();
+      fetchPreviews();
     }
-  }, [ready, fetchFigures]);
+  }, [ready, fetchPreviews]);
 
-  const open = (figure: Figure) => {
+  // Card tap: show ad → navigate. Gemini call (if needed) happens in FigureScreen.
+  const openPreview = (preview: PreviewCard) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    void markViewed(figure.id);
-    navigation.navigate('Figure', { figureId: figure.id });
-  };
-
-  // ↻ — gate dynamic generation behind a (mock) interstitial ad. The Gemini
-  // call only happens after the user finishes watching.
-  const reroll = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    void markViewed(preview.slug);
+    setPendingPreview(preview);
     setAdVisible(true);
   };
-  const handleAdDone = async () => {
+
+  const handleAdDone = () => {
     setAdVisible(false);
-    await Promise.all(figures.map((f) => markViewed(f.id)));
-    fetchFigures(figures.map((f) => f.id), { preferDynamic: true });
+    if (!pendingPreview) return;
+    const p = pendingPreview;
+    setPendingPreview(null);
+    if (p.figureId) {
+      navigation.navigate('Figure', { figureId: p.figureId });
+    } else {
+      navigation.navigate('Figure', { preview: p });
+    }
+  };
+
+  // Dev-only re-roll: shuffle previews (no ad, no Gemini cost).
+  const reroll = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    fetchPreviews(previews.map((p) => p.slug));
   };
 
   const onResetAll = () => {
@@ -100,14 +100,12 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
           style: 'destructive',
           onPress: async () => {
             await resetViewed();
-            fetchFigures();
+            fetchPreviews();
           },
         },
       ],
     );
   };
-
-  const isLoadingState = (loading || generating) && figures.length === 0;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -120,30 +118,23 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
             <Text style={styles.subtitle}>당신의 하루를 비추는 세 사람.</Text>
             {viewedIds.length > 0 && (
               <Pressable onPress={onResetAll} hitSlop={8} style={styles.viewedRow}>
-                <Text style={styles.viewedText}>
-                  지금까지 {viewedIds.length}명 시청
-                </Text>
+                <Text style={styles.viewedText}>지금까지 {viewedIds.length}명 시청</Text>
                 <Text style={styles.viewedReset}>· 초기화 ↺</Text>
               </Pressable>
             )}
           </View>
-          <Pressable
-            onPress={reroll}
-            hitSlop={12}
-            style={styles.rerollBtn}
-            disabled={generating || adVisible}
-          >
+          <Pressable onPress={reroll} hitSlop={12} style={styles.rerollBtn} disabled={loading}>
             <Text style={styles.rerollGlyph}>↻</Text>
           </Pressable>
         </View>
 
-        {error && !isLoadingState && (
+        {error && (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>불러오기 실패: {error}</Text>
           </View>
         )}
 
-        {isLoadingState ? (
+        {loading ? (
           <>
             <FaceFillPlaceholder />
             <FaceFillPlaceholder />
@@ -151,20 +142,18 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
           </>
         ) : (
           !exhausted &&
-          figures.slice(0, 3).map((figure, i) => (
-            <FigureCard
-              key={figure.id}
-              figure={figure}
-              locked={false}
+          previews.slice(0, 3).map((p, i) => (
+            <PreviewCardView
+              key={p.slug}
+              preview={p}
               featured={i === 0}
               profile={profile}
-              onPress={() => open(figure)}
-              onUnlock={() => {}}
+              onPress={() => openPreview(p)}
             />
           ))
         )}
 
-        {!loading && !generating && exhausted && (
+        {!loading && exhausted && (
           <View style={styles.exhaustedBox}>
             <Text style={styles.exhaustedTitle}>모든 위인을 다 만나셨습니다.</Text>
             <Text style={styles.exhaustedDesc}>
@@ -178,7 +167,7 @@ export default function DailyScreen({ navigation }: ScreenProps<'Daily'>) {
 
         <View style={styles.footerNote}>
           <Text style={styles.footerText}>
-            ↻로 새 위인을 받을 때마다 짧은 광고가 표시됩니다.
+            카드 탭 시 짧은 광고 후 위인 이야기가 열립니다.
           </Text>
         </View>
       </ScrollView>

@@ -6,42 +6,55 @@ import { colors, radii, spacing, type } from '../theme';
 /**
  * Loading placeholder while a figure card is being generated.
  *
- * Visual: silhouette of a head drawn in gold, with a horizontal fill rising
- * from the bottom over ~5 seconds and looping. Designed to be swapped for a
- * Lottie file later — the user mentioned they'll provide one.
+ * Pass `progress` (0..1) for real progress, or leave undefined for a looping
+ * indeterminate animation. Designed to be swapped for a Lottie file later.
  */
-export function FaceFillPlaceholder({ caption }: { caption?: string }) {
+export function FaceFillPlaceholder({
+  progress,
+  caption,
+}: {
+  progress?: number;
+  caption?: string;
+}) {
   const fill = useRef(new Animated.Value(0)).current;
+  const indeterminate = progress === undefined;
 
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(fill, {
-          toValue: 1,
-          duration: 5000,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: false,
-        }),
-        Animated.timing(fill, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: false,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => {
-      loop.stop();
-    };
-  }, [fill]);
+    if (indeterminate) {
+      // Looping fill while we have no concrete progress signal.
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(fill, {
+            toValue: 1,
+            duration: 5000,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: false,
+          }),
+          Animated.timing(fill, {
+            toValue: 0,
+            duration: 0,
+            useNativeDriver: false,
+          }),
+        ]),
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+    // Animate toward the real progress value.
+    Animated.timing(fill, {
+      toValue: Math.max(0, Math.min(1, progress)),
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [fill, indeterminate, progress]);
 
-  // Inner fill bar height = 0% → 100% from bottom
   const fillHeight = fill.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+  const percent = indeterminate ? null : Math.round((progress ?? 0) * 100);
 
   return (
     <View style={styles.card}>
       <View style={styles.silhouetteWrap}>
-        {/* Outer silhouette outline (gold) */}
         <Svg width={120} height={140} viewBox="0 0 120 140">
           <Path
             d="M60 16 C40 16 28 32 28 52 C28 66 34 78 44 84 L44 88 C30 92 14 102 14 124 L14 140 L106 140 L106 124 C106 102 90 92 76 88 L76 84 C86 78 92 66 92 52 C92 32 80 16 60 16 Z"
@@ -51,13 +64,10 @@ export function FaceFillPlaceholder({ caption }: { caption?: string }) {
           />
         </Svg>
 
-        {/* Rising fill — clipped to the silhouette shape by overflow */}
         <View style={styles.fillContainer} pointerEvents="none">
           <Animated.View style={[styles.fillBar, { height: fillHeight }]} />
         </View>
 
-        {/* Inner silhouette mask — same shape stroked again, on top so the
-            fill appears "inside" the figure */}
         <View style={styles.maskOverlay} pointerEvents="none">
           <Svg width={120} height={140} viewBox="0 0 120 140">
             <Path
@@ -70,7 +80,9 @@ export function FaceFillPlaceholder({ caption }: { caption?: string }) {
         </View>
       </View>
 
-      <Text style={styles.label}>새 위인을 모셔오는 중…</Text>
+      <Text style={styles.label}>
+        {percent != null ? `${percent}% — 위인을 모셔오는 중` : '위인을 모셔오는 중…'}
+      </Text>
       {caption && <Text style={styles.caption}>{caption}</Text>}
     </View>
   );
